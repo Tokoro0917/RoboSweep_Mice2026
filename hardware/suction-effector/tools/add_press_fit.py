@@ -19,7 +19,7 @@ import trimesh
 from trimesh.creation import annulus, box, revolve
 
 PIPE_R = 41.24 / 2       # 下の部品の筒の外半径（軸の中心から測った値）
-SKIRT_H = 4.5            # スカートの高さ（筒のまっすぐな部分は 6.4mm）
+SKIRT_H = 6.0            # スカートの高さ（筒のまっすぐな部分は 6.4mm。コーンが広がる手前 0.4mm まで）
 SKIRT_T = 1.6            # スカートの厚さ
 LEAD = 0.6               # 入口の面取り
 JOIN_H = 0.8             # スカートと壁をつなぐ輪の高さ（スリットは床から 1.0mm 上から）
