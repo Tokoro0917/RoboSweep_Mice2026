@@ -20,6 +20,7 @@ for f in ("IPAGothic", "IPAexGothic", "Noto Sans CJK JP"):
         break
 
 Z_CUT = 38.4
+SKIRT_H = 4.5        # はめ込みのスカートの高さ
 IMP_Z = 38.9          # インペラの羽根の下端（床から 0.5mm）
 MOTOR_D = 8.6
 MOTOR_BOTTOM = 48.9   # モーターの下面（ハブの上から 0.5mm）
@@ -27,12 +28,12 @@ MOTOR_BOTTOM = 48.9   # モーターの下面（ハブの上から 0.5mm）
 
 def load_assembled():
     lower = trimesh.load("robosweep_effector_lower.stl")
-    upper = trimesh.load("robosweep_effector_upper.stl")
+    upper = trimesh.load("robosweep_effector_upper_fit0.2.stl")
     imp = trimesh.load("robosweep_impeller_d1.3.stl")
-    # 組み立てた向きに戻す
+    # 組み立てた向きに戻す（上の部品はスカートの下端が z=0）
     lower.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
     lower.apply_translation([0, 0, -lower.bounds[0][2]])
-    upper.apply_translation([0, 0, Z_CUT])
+    upper.apply_translation([0, 0, Z_CUT - SKIRT_H])
     imp.apply_translation([0, 0, IMP_Z])
     return lower, upper, imp
 
@@ -73,6 +74,8 @@ def fig_section():
     a.annotate("取り付けアーム（M3 × 2）", xy=(35, 48.8), xytext=(18, 55), fontsize=10, color="#b5651d",
                arrowprops=dict(arrowstyle="->", color="#b5651d"))
     a.text(22, 36.2, "ここで上下に分かれる（緑の点線）", fontsize=9.5, color="#2ca02c")
+    a.annotate("はめ込みのスカート\n（下の部品の筒にかぶせる）", xy=(-22.5, 36), xytext=(-48, 51), fontsize=10, color="#b5651d",
+               arrowprops=dict(arrowstyle="->", color="#b5651d"))
     a.text(-48, -2, "灰色 = 下の部品　茶色 = 上の部品　青 = インペラ　赤 = モーター（長さは実物に合わせる）", fontsize=9)
 
     b = axes[1]
@@ -108,19 +111,19 @@ def draw_mesh(ax, mesh, color, elev=25, azim=-60):
 
 def fig_parts():
     lower = trimesh.load("robosweep_effector_lower.stl")
-    upper = trimesh.load("robosweep_effector_upper.stl")
+    upper = trimesh.load("robosweep_effector_upper_fit0.2.stl")
     imp = trimesh.load("robosweep_impeller_d1.3.stl")
     fig = plt.figure(figsize=(15, 5.6))
     items = [
         (lower, "#9a9a9a", 30, "下の部品（印刷の向き）\nコーンの口が上・サポートなし"),
-        (upper, "#d28c4b", 30, "上の部品（印刷の向き）\nインペラ室の開いた側が下\nアームの下だけサポート"),
+        (upper, "#d28c4b", 30, "上の部品・はめ込み（印刷の向き）\nスカートが下\nアームの下とスカート内側の輪の下にサポート"),
         (imp, "#4a90d9", 35, "インペラ（印刷の向き）\n羽根が下・円板とハブが上"),
     ]
     for i, (mesh, color, elev, title) in enumerate(items):
         ax = fig.add_subplot(1, 3, i + 1, projection="3d")
         draw_mesh(ax, mesh, color, elev=elev)
-        ax.set_title(title, fontsize=12)
-    fig.tight_layout()
+        ax.set_title(title, fontsize=12, pad=14)
+    fig.tight_layout(rect=(0, 0, 1, 0.93))
     fig.savefig("images/parts.png", dpi=120)
     plt.close(fig)
 
