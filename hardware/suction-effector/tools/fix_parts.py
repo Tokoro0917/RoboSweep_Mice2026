@@ -9,7 +9,7 @@
    インペラ室の中（半径 16.5mm 以内、z=38.4〜46.4）を空け、天井の高さを 8.0mm にそろえる。
    何回実行しても結果は同じ。
 2. インペラ: 軸穴 Φ1.2 は印刷すると細くなり、モーターの軸（Φ1.2）が入らない。
-   軸穴を Φ1.3 / Φ1.4 に広げたものを作る。
+   軸穴を Φ1.3 / Φ1.4 / Φ1.5 に広げたものを作る。
 """
 import trimesh
 from trimesh.creation import cylinder
@@ -27,7 +27,7 @@ m.export("robosweep_effector_assembled.stl")
 print("組み立てた形: 閉じた形", m.is_watertight, "体積 %.2fcm3" % (m.volume / 1000))
 
 imp = trimesh.load("robosweep_impeller_d1.2.stl")
-for d in (1.3, 1.4):
+for d in (1.3, 1.4, 1.5):
     hole = cylinder(radius=d / 2, height=30, sections=48)
     out = trimesh.boolean.difference([imp, hole], engine="manifold")
     out.export(f"robosweep_impeller_d{d}.stl")
