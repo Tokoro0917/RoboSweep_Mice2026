@@ -22,7 +22,7 @@
 #include "stm32f4xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "motor.h"
+#include "drv_stepper.h"
 #include "app.h"
 /* USER CODE END Includes */
 
@@ -229,7 +229,7 @@ void TIM3_IRQHandler(void)
   /* USER CODE END TIM3_IRQn 0 */
   HAL_TIM_IRQHandler(&htim3);
   /* USER CODE BEGIN TIM3_IRQn 1 */
-  motor_on_timer_update(WHEEL_LEFT);
+  stepper_on_timer_update(TIM3);
 
   /* USER CODE END TIM3_IRQn 1 */
 }
@@ -284,7 +284,7 @@ void DMA2_Stream0_IRQHandler(void)
 void TIM8_UP_TIM13_IRQHandler(void)
 {
   HAL_TIM_IRQHandler(&htim8);
-  motor_on_timer_update(WHEEL_RIGHT);
+  stepper_on_timer_update(TIM8);
 }
 
 /* USER CODE END 1 */

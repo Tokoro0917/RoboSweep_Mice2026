@@ -8,7 +8,7 @@
  *   リモコン --ESP-NOW--> この ESP32 --UART 115200bps--> STM32（UART4）
  *
  * STM32 に送る形: 0xAA, ボタン（1 バイト）, 0x55
- * （STM32 側は software/firmware/MySWEEP1/Core/Src/remote_link.c）
+ * （STM32 側は software/firmware/MySWEEP1/Core/Src/drv_link.c）
  *
  * 起動すると、この ESP32 の MAC アドレスを USB シリアル（115200bps）に表示する。
  * その値を remote_controller.ino の receiverAddress に書くこと。
@@ -39,7 +39,7 @@ const uint32_t LINK_TIMEOUT_MS = 200;
 const uint32_t SEND_INTERVAL_MS = 50;
 
 // ==========================================
-// STM32 側のボタンのビット（remote_link.h と同じ）
+// STM32 側のボタンのビット（drv_link.h と同じ）
 // ==========================================
 const uint8_t BTN_R     = 0x01;  // アーム: ホームポジション
 const uint8_t BTN_B     = 0x02;  // 吸引ファン ON/OFF
