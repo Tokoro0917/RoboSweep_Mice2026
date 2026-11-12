@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "new_freshman_cm-symbol")(type "KiCad")(uri "${KIPRJMOD}/../lib/new_freshman_cm/new_freshman_cm-symbol.kicad_sym")(options "")(descr ""))
+)

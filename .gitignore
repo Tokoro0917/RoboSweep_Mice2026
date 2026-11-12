@@ -33,3 +33,11 @@ __pycache__/
 Debug/
 Release/
 *.launch
+# KiCad（自動バックアップ・個人設定・キャッシュ）
+*-backups/
+production/backups/
+fp-info-cache
+*.kicad_prl
+*.lck
+_autosave-*
+\#auto_saved_files#

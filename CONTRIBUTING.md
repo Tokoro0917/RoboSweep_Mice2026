@@ -4,21 +4,7 @@
 
 ## 基本の流れ
 
-1. `main` を最新にする
-   ```bash
-   git switch main
-   git pull origin main
-   ```
-2. 作業用ブランチを作る（名前は下のルールに従う）
-   ```bash
-   git switch -c feature/sweep-arm-design
-   ```
-3. 作業してコミット
-4. push して Pull Request (PR) を作る
-   ```bash
-   git push -u origin feature/sweep-arm-design
-   ```
-5. 他のメンバーに確認してもらってから `main` にマージ
+クローンの方法と、GitHub に上げるまでの手順は [README の「リポジトリの使い方」](README.md#リポジトリの使い方) にあります。
 
 > `main` へ直接 push しないでください。必ず PR を経由します。
 
@@ -61,3 +47,4 @@
 
 - CAD や画像など大きなバイナリは、同じファイルを複数人で同時に編集すると衝突を解消できません。編集前に Issue やチャットで声をかけてください
 - パスワードや API キーなどの秘密情報はコミットしないでください
+- このリポジトリは **Public** です。公式の参考機体「ムブアイ」の資料（回路図・CAD・ファームウェア・説明PDF）や、それを改変したものはコミットしないでください（ライセンス上、不特定の第三者への配布が禁止されています）。詳しくは [docs/rules/robosweep-rules.md](docs/rules/robosweep-rules.md) を参照
