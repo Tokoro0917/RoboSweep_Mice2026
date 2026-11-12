@@ -4,28 +4,26 @@
     pip install trimesh manifold3d numpy
     python tools/add_press_fit.py
 
-下の部品の吸込口の板の下には、外径 Φ41.67 のまっすぐな筒が 6.4mm ある。
+下の部品の吸込口の板の下には、外径 Φ41.24 のまっすぐな筒が 6.4mm ある。
 上の部品の下にこの筒の外側にかぶさるスカートを付け、はめ込み（圧入）で止める。
 上下方向は、インペラ室の壁の下端が板の上面に当たって止まる（インペラ室の高さ 8mm は変わらない）。
 
 できるもの
-    robosweep_effector_upper_fit0.1.stl : スカートの内径 = 筒の外径 + 0.1mm（直径で。きつめ）
-    robosweep_effector_upper_fit0.2.stl : + 0.2mm（ふつう）
-    robosweep_effector_upper_fit0.3.stl : + 0.3mm（ゆるめ）
+    robosweep_effector_upper_fit0.2.stl … fit0.5.stl : スカートの内径 = 筒の外径 + 0.2 〜 0.5mm（直径で）
     印刷すると穴は細く出るので、どれが合うかは試験リングで確かめる。
-    fit_test_skirt.stl : 上の 3 通りのスカートだけの試験リング（切り欠きの数 = 1, 2, 3）
+    fit_test_skirt.stl : 上の 4 通りのスカートだけの試験リング（切り欠きの数 = 1, 2, 3, 4）
 """
 import numpy as np
 import trimesh
 from trimesh.creation import annulus, box, revolve
 
-PIPE_R = 41.67 / 2       # 下の部品の筒の外半径
+PIPE_R = 41.24 / 2       # 下の部品の筒の外半径（軸の中心から測った値）
 SKIRT_H = 4.5            # スカートの高さ（筒のまっすぐな部分は 6.4mm）
 SKIRT_T = 1.6            # スカートの厚さ
 LEAD = 0.6               # 入口の面取り
 JOIN_H = 0.8             # スカートと壁をつなぐ輪の高さ（スリットは床から 1.0mm 上から）
 WALL_INNER_R = 16.5
-CLEARANCES = (0.1, 0.2, 0.3)
+CLEARANCES = (0.2, 0.3, 0.4, 0.5)
 
 
 def skirt(clearance, with_join=True):
@@ -69,13 +67,13 @@ def main():
         # 切り欠き（1, 2, 3 個）で見分ける
         for k in range(i + 1):
             notch = box(extents=[2.0, 4.0, 1.2])
-            ang = np.radians(20 * k)
+            ang = np.radians(15 * k)
             rr = PIPE_R + c / 2 + SKIRT_T
             notch.apply_translation([rr * np.cos(ang), rr * np.sin(ang), SKIRT_H + 0.5])
             ring = trimesh.boolean.difference([ring, notch], engine="manifold")
         # 印刷の向き: つばを下に
         ring.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
-        ring.apply_translation([i * 50.0, 0, -ring.bounds[0][2]])
+        ring.apply_translation([(i % 2) * 50.0, (i // 2) * 50.0, -ring.bounds[0][2]])
         rings.append(ring)
     test = trimesh.util.concatenate(rings)
     test.export("fit_test_skirt.stl")

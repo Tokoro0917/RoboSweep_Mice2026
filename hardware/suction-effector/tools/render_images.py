@@ -21,14 +21,14 @@ for f in ("IPAGothic", "IPAexGothic", "Noto Sans CJK JP"):
 
 Z_CUT = 38.4
 SKIRT_H = 4.5        # はめ込みのスカートの高さ
-IMP_Z = 38.9          # インペラの羽根の下端（床から 0.5mm）
+IMP_Z = 39.9          # インペラの羽根の下端（床から 1.5mm）
 MOTOR_D = 8.6
-MOTOR_BOTTOM = 48.9   # モーターの下面（ハブの上から 0.5mm）
+MOTOR_BOTTOM = 49.6   # モーターの下面（天井の上面で止まる）
 
 
 def load_assembled():
     lower = trimesh.load("robosweep_effector_lower.stl")
-    upper = trimesh.load("robosweep_effector_upper_fit0.1.stl")
+    upper = trimesh.load("robosweep_effector_upper_fit0.3.stl")
     imp = trimesh.load("robosweep_impeller_d1.5.stl")
     # 組み立てた向きに戻す（上の部品はスカートの下端が z=0）
     lower.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
@@ -48,7 +48,7 @@ def fig_section():
     lower, upper, imp = load_assembled()
     fig, axes = plt.subplots(1, 2, figsize=(14, 8.2), gridspec_kw={"width_ratios": [1.25, 1]})
     for ax, (xlim, ylim, title) in zip(axes, [((-50, 50), (-3, 72), "断面図（組み立てた状態・ボールを吸う向き）"),
-                                              ((-22, 22), (35, 62), "インペラ室の拡大")]):
+                                              ((-22, 22), (35, 65), "インペラ室の拡大")]):
         for mesh, color, lw in ((lower, "#555555", 1.4), (upper, "#b5651d", 1.4), (imp, "#1f77b4", 1.6)):
             ax.add_collection(LineCollection(section_lines(mesh, [0, 1, 0]), colors=color, linewidths=lw))
         ax.add_patch(Rectangle((-MOTOR_D / 2, MOTOR_BOTTOM), MOTOR_D, 20, fill=False, ec="#d62728", lw=1.6, ls="--"))
@@ -79,15 +79,17 @@ def fig_section():
     a.text(-48, -2, "灰色 = 下の部品　茶色 = 上の部品　青 = インペラ　赤 = モーター（長さは実物に合わせる）", fontsize=9)
 
     b = axes[1]
-    b.annotate("天井（床から 8.0mm）", xy=(-14, 46.4), xytext=(-21, 52), fontsize=10,
+    b.annotate("天井（床から 10mm）", xy=(-14, 48.4), xytext=(-21, 52), fontsize=10,
                arrowprops=dict(arrowstyle="->"))
     b.annotate("排気スリット（6 本）", xy=(18.5, 42.5), xytext=(4, 36), fontsize=10,
                arrowprops=dict(arrowstyle="->"))
-    b.annotate("円板とハブ（長いほう）が上", xy=(2.6, 47.5), xytext=(5, 57), fontsize=10, color="#1f77b4",
+    b.annotate("円板とハブ（長いほう）が上", xy=(2.6, 47.9), xytext=(5, 58.5), fontsize=10, color="#1f77b4",
                arrowprops=dict(arrowstyle="->", color="#1f77b4"))
     b.annotate("軸（Φ1.2）をハブの穴に圧入", xy=(0, 46), xytext=(-21, 59), fontsize=10, color="#d62728",
                arrowprops=dict(arrowstyle="->", color="#d62728"))
-    b.text(-21, 35.6, "すき間：羽根の下 0.5mm ／ 円板の上 0.5mm", fontsize=10)
+    b.annotate("モーターはここで止まる\n（天井の穴 Φ5.6）", xy=(3.5, 49.6), xytext=(6, 52.5), fontsize=10, color="#d62728",
+               arrowprops=dict(arrowstyle="->", color="#d62728"))
+    b.text(-21, 63.2, "すき間：羽根の下 1.5mm ／ 円板の上 1.5mm ／ 横 1.5mm", fontsize=10)
     fig.tight_layout()
     fig.savefig("images/section.png", dpi=130)
     plt.close(fig)
@@ -111,7 +113,7 @@ def draw_mesh(ax, mesh, color, elev=25, azim=-60):
 
 def fig_parts():
     lower = trimesh.load("robosweep_effector_lower.stl")
-    upper = trimesh.load("robosweep_effector_upper_fit0.1.stl")
+    upper = trimesh.load("robosweep_effector_upper_fit0.3.stl")
     imp = trimesh.load("robosweep_impeller_d1.5.stl")
     fig = plt.figure(figsize=(15, 5.6))
     items = [

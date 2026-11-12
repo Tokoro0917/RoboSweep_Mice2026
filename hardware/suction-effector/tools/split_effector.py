@@ -23,7 +23,7 @@ Z_CUT = 38.4   # 吸込口の板の上面 = インペラ室の床
 
 def main(src, outdir):
     m = trimesh.load(src)
-    cx, cy = (m.bounds[0][:2] + m.bounds[1][:2]) / 2
+    cx, cy = 0.0, 0.0   # 吸着ユニットの軸（取り付けアームがあるので外形の中心とは 0.21mm ずれる）
 
     big = 200
     below = box(extents=[big, big, Z_CUT + 10])
