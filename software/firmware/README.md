@@ -1,38 +1,42 @@
 # ファームウェア
 
-## `MySWEEP1/` — リモコン操作のテスト用プログラム（STM32）
+## `MySWEEP1/` — 機体のプログラム（STM32）
 
 DOM-SWEEP 基板の STM32F446 で動くプログラムです。**STM32CubeIDE** で開きます。
 
-リモコンのボタンで、走行・アーム・吸引ファンを動かして**ハードウェアの動作を確認するためのもの**です。
+リモコンで走行・アーム・吸引ファンを動かせます。自律走行で使う関数（1区画進む、その場で回る、壁の判定）も入っています。
 
-> ⚠️ 競技ではロボットは自律で動かす必要があります（[ルールまとめ](../../docs/rules/robosweep-rules.md)）。
-> このプログラムは試験用で、そのまま競技には使えません。
+> ⚠️ 競技では、ロボットは自律で動かす必要があります（[ルールまとめ](../../docs/rules/robosweep-rules.md)）。今はリモコン操作だけなので、自律走行は Issue #6〜#12 で作っていきます。
 
-| ボタン | 動作 |
+| リモコン | 動作 |
 | --- | --- |
-| 前 / 後 | 押している間、前進 / 後退（前進は壁センサで姿勢を補正） |
-| 右 / 左 | 押している間、その場で旋回 |
+| X / B | 押している間、前進 / 後退（前進は横の壁で補正） |
+| Y / A | 押している間、その場で左 / 右に回る |
 | F | アームを下ろしてボールをつかむ（吸引ファン ON） |
 | R | アームをホームポジションに戻す（吸引ファン OFF） |
 | L | ボールを投げる |
-| B | 吸引ファンの ON / OFF |
+| Back | 吸引ファンの ON / OFF |
 
-主なファイル:
-
-- `Core/Src/main.c`: ボタンごとの動作
-- `Core/Src/PL_Motor.c`: ステッピングモーターの台形加減速、壁センサを使った制御
-- `Core/Src/PL_sensor.c`: 壁センサ（AD 変換）
-- `Core/Src/Pl_servo.c`: アーム用サーボ（RS204MD）の通信
-- `MySWEEP1.ioc`: CubeMX のピン・周辺機能の設定
-
-ボタンの状態は UART で受け取っています（115200bps）。
+プログラムの構成、ピンの割り当て、通信の形式は [機体の仕様書](../../docs/machine-spec.md) にまとめてあります。調整する値（速度・しきい値・アームの角度など）は、すべて `Core/Inc/config.h` にあります。
 
 ### 開き方
 
 1. STM32CubeIDE で「File → Import → Existing Projects into Workspace」を選び、`MySWEEP1` フォルダを指定する
 2. ビルドすると `Debug/` フォルダができます（Git には入りません）
 3. デバッグ設定（`.launch`）は各自の PC で作ってください（Git には入りません）
+
+STM32CubeIDE がなくても、`arm-none-eabi-gcc` があればビルドできます。
+
+```bash
+cd software/firmware/MySWEEP1
+make
+```
+
+走行の計算（`ctl_motion.c`）と壁を見た補正（`ctl_wall.c`）は、PC 上でテストできます。
+
+```bash
+make -C software/firmware/MySWEEP1/test
+```
 
 ## `remote_controller/` — リモコン（ESP32、Arduino）
 
@@ -42,4 +46,20 @@ DOM-SWEEP 基板の STM32F446 で動くプログラムです。**STM32CubeIDE** 
 - 50ms ごとに送信
 - 送り先の MAC アドレスは `receiverAddress` に書きます。機体を替えたら書き換えてください
 
-> 機体側で ESP-NOW を受信して STM32 に UART で渡すプログラムは、まだリポジトリに入っていません。
+## `robot_receiver/` — 機体に載せる受信用 ESP32（Arduino）
+
+リモコンから ESP-NOW で届いたボタンの状態を、STM32 に UART で渡すプログラムです。
+
+- XIAO ESP32C3 を想定しています。違うボードのときは、先頭の `PIN_UART_TX` を変えてください。
+- 配線：ESP32 の TX（D6）を STM32 の UART4_RX（PA1、J4 の 3 番）に、GND 同士もつなぎます。
+- 起動すると、USB シリアル（115200bps）にこの ESP32 の MAC アドレスを表示します。その値を、リモコンの `receiverAddress` に書いてください。
+- どのボタンでどう動くかは、`to_stm32_buttons()` で変えられます。
+
+| リモコン | 動作 |
+| --- | --- |
+| X / B | 前進 / 後退 |
+| Y / A | 左旋回 / 右旋回 |
+| F | つかむ |
+| R | ホームポジション |
+| L | 投げる |
+| Back | 吸引ファン ON / OFF |

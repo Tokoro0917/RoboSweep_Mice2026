@@ -22,8 +22,8 @@
 #include "stm32f4xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "PL_Motor.h"
-#include "PL_sensor.h"
+#include "drv_stepper.h"
+#include "app.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -229,7 +229,7 @@ void TIM3_IRQHandler(void)
   /* USER CODE END TIM3_IRQn 0 */
   HAL_TIM_IRQHandler(&htim3);
   /* USER CODE BEGIN TIM3_IRQn 1 */
-  motor_set_speedl();
+  stepper_on_timer_update(TIM3);
 
   /* USER CODE END TIM3_IRQn 1 */
 }
@@ -258,46 +258,7 @@ void TIM6_DAC_IRQHandler(void)
   /* USER CODE END TIM6_DAC_IRQn 0 */
   HAL_TIM_IRQHandler(&htim6);
   /* USER CODE BEGIN TIM6_DAC_IRQn 1 */
-  pl_interupt_getSensor();
-  modify_speed();
-
-  nowl = g_sensor[1][0];
-  nowr =  g_sensor[2][0];
-  nowf1 = g_sensor[0][0];
-  nowf2 = g_sensor[3][0];
-
-
-  if(isdaikei){
-	  Gv += Gacc * per;
-	  Gx += Gv * per;
-
-	  if(iswallcontrol){
-		  float addpgain = 1;
-		  /*if(isdash){
-			  addpgain = caladdpgain(svlist[isdash-1],ADDGAIN);
-		  }
-		  */
-		  float l = nowl;
-		  float r = nowr;
-		  float PID_wall = wallcontrol(l,r)*addpgain;
-		  //float PID_wallf = SENSOR_GAINF * ((nowf1+nowf2)/2-CENTOR_F) * Gv/300*addpgain;
-		  float PID_wallf = 0;
-		  if((nowf1 > CENTOR_F2 || nowf2 > CENTOR_F2) && (CENTER_R < nowr || CENTER_L < nowl)){
-			  PID_wall = 0;
-		  }
-		  Gvl += PID_wall;
-		  Gvr -= PID_wall;
-//		  Gvl -= PID_wallf;
-//		  Gvr -= PID_wallf;
-	  }
-
-
-
-  }
-
-
-
-
+  app_control_tick();   /* 1ms ごとの制御 */
   /* USER CODE END TIM6_DAC_IRQn 1 */
 }
 
@@ -323,7 +284,7 @@ void DMA2_Stream0_IRQHandler(void)
 void TIM8_UP_TIM13_IRQHandler(void)
 {
   HAL_TIM_IRQHandler(&htim8);
-  motor_set_speedr();
+  stepper_on_timer_update(TIM8);
 }
 
 /* USER CODE END 1 */
