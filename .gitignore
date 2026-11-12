@@ -1,0 +1,30 @@
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Build
+build/
+.pio/
+*.o
+*.elf
+*.hex
+*.bin
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# CAD のバックアップ・一時ファイル
+*.bak
+*~lock*
+~$*
+
+# 秘密情報
+.env
