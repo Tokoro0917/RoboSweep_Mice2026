@@ -28,8 +28,8 @@ MOTOR_BOTTOM = 48.9   # モーターの下面（ハブの上から 0.5mm）
 
 def load_assembled():
     lower = trimesh.load("robosweep_effector_lower.stl")
-    upper = trimesh.load("robosweep_effector_upper_fit0.2.stl")
-    imp = trimesh.load("robosweep_impeller_d1.3.stl")
+    upper = trimesh.load("robosweep_effector_upper_fit0.1.stl")
+    imp = trimesh.load("robosweep_impeller_d1.5.stl")
     # 組み立てた向きに戻す（上の部品はスカートの下端が z=0）
     lower.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
     lower.apply_translation([0, 0, -lower.bounds[0][2]])
@@ -111,8 +111,8 @@ def draw_mesh(ax, mesh, color, elev=25, azim=-60):
 
 def fig_parts():
     lower = trimesh.load("robosweep_effector_lower.stl")
-    upper = trimesh.load("robosweep_effector_upper_fit0.2.stl")
-    imp = trimesh.load("robosweep_impeller_d1.3.stl")
+    upper = trimesh.load("robosweep_effector_upper_fit0.1.stl")
+    imp = trimesh.load("robosweep_impeller_d1.5.stl")
     fig = plt.figure(figsize=(15, 5.6))
     items = [
         (lower, "#9a9a9a", 30, "下の部品（印刷の向き）\nコーンの口が上・サポートなし"),
@@ -129,7 +129,7 @@ def fig_parts():
 
 
 def fig_impeller_bottom():
-    imp = trimesh.load("robosweep_impeller_d1.3.stl")
+    imp = trimesh.load("robosweep_impeller_d1.5.stl")
     fig = plt.figure(figsize=(11, 5.4))
     ax = fig.add_subplot(1, 2, 1, projection="3d")
     draw_mesh(ax, imp, "#4a90d9", elev=-35, azim=-60)
