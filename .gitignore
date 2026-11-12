@@ -28,3 +28,12 @@ __pycache__/
 
 # 秘密情報
 .env
+
+# KiCad（自動バックアップ・個人設定・キャッシュ）
+*-backups/
+production/backups/
+fp-info-cache
+*.kicad_prl
+*.lck
+_autosave-*
+\#auto_saved_files#
