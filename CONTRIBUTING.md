@@ -4,21 +4,7 @@
 
 ## 基本の流れ
 
-1. `main` を最新にする
-   ```bash
-   git switch main
-   git pull origin main
-   ```
-2. 作業用ブランチを作る（名前は下のルールに従う）
-   ```bash
-   git switch -c feature/sweep-arm-design
-   ```
-3. 作業してコミット
-4. push して Pull Request (PR) を作る
-   ```bash
-   git push -u origin feature/sweep-arm-design
-   ```
-5. 他のメンバーに確認してもらってから `main` にマージ
+クローンの方法と、GitHub に上げるまでの手順は [README の「リポジトリの使い方」](README.md#リポジトリの使い方) にあります。
 
 > `main` へ直接 push しないでください。必ず PR を経由します。
 
