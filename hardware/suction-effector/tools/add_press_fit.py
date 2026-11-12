@@ -9,8 +9,9 @@
 上下方向は、インペラ室の壁の下端が板の上面に当たって止まる（インペラ室の高さ 8mm は変わらない）。
 
 できるもの
-    robosweep_effector_upper_fit0.2.stl … fit0.5.stl : スカートの内径 = 筒の外径 + 0.2 〜 0.5mm（直径で）
-    印刷すると穴は細く出るので、どれが合うかは試験リングで確かめる。
+    robosweep_effector_upper_fit+0.1.stl / fit0.0 / fit-0.1 / fit-0.2 :
+        スカートの内径 = 筒の外径 + 0.1 / 0 / -0.1 / -0.2mm（直径で。- は押し込む「しまりばめ」）
+        P2S では、すき間 0.2〜0.5mm はどれもゆるかった。
     fit_test_skirt.stl : 上の 4 通りのスカートだけの試験リング（切り欠きの数 = 1, 2, 3, 4）
 """
 import numpy as np
@@ -23,7 +24,20 @@ SKIRT_T = 1.6            # スカートの厚さ
 LEAD = 0.6               # 入口の面取り
 JOIN_H = 0.8             # スカートと壁をつなぐ輪の高さ（スリットは床から 1.0mm 上から）
 WALL_INNER_R = 16.5
-CLEARANCES = (0.2, 0.3, 0.4, 0.5)
+CLEARANCES = (0.1, 0.0, -0.1, -0.2)
+
+
+def clean(m):
+    """ほぼ同じ位置の頂点（1e-4mm 以内）をまとめ、つぶれた三角形を消す。保存して読み直しても閉じた形か確かめる"""
+    m = m.copy()
+    m.merge_vertices(digits_vertex=4)
+    m.update_faces(m.nondegenerate_faces(height=1e-6))
+    m.remove_unreferenced_vertices()
+    assert m.is_volume, "閉じた形になっていない"
+    import io
+    buf = io.BytesIO(m.export(file_type="stl"))
+    assert trimesh.load(buf, file_type="stl").is_volume, "保存した STL が閉じた形になっていない"
+    return m
 
 
 def skirt(clearance, with_join=True):
@@ -51,7 +65,8 @@ def main():
     for c in CLEARANCES:
         part = trimesh.boolean.union([upper, skirt(c)], engine="manifold")
         part.apply_translation([0, 0, -part.bounds[0][2]])
-        name = f"robosweep_effector_upper_fit{c:.1f}.stl"
+        part = clean(part)
+        name = f"robosweep_effector_upper_fit{c:+.1f}.stl".replace("+0.0", "0.0")
         part.export(name)
         print(f"{name}: 閉じた形={part.is_volume} 大きさ={(part.bounds[1] - part.bounds[0]).round(2).tolist()}"
               f" スカート内径=Φ{2 * PIPE_R + c:.2f}")

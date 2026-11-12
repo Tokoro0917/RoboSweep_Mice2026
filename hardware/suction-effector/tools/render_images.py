@@ -28,7 +28,7 @@ MOTOR_BOTTOM = 49.6   # モーターの下面（天井の上面で止まる）
 
 def load_assembled():
     lower = trimesh.load("robosweep_effector_lower.stl")
-    upper = trimesh.load("robosweep_effector_upper_fit0.3.stl")
+    upper = trimesh.load("robosweep_effector_upper_fit0.0.stl")
     imp = trimesh.load("robosweep_impeller_d1.5.stl")
     # 組み立てた向きに戻す（上の部品はスカートの下端が z=0）
     lower.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
@@ -113,7 +113,7 @@ def draw_mesh(ax, mesh, color, elev=25, azim=-60):
 
 def fig_parts():
     lower = trimesh.load("robosweep_effector_lower.stl")
-    upper = trimesh.load("robosweep_effector_upper_fit0.3.stl")
+    upper = trimesh.load("robosweep_effector_upper_fit0.0.stl")
     imp = trimesh.load("robosweep_impeller_d1.5.stl")
     fig = plt.figure(figsize=(15, 5.6))
     items = [
