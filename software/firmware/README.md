@@ -18,21 +18,26 @@ DOM-SWEEP 基板の STM32F446 で動くプログラムです。**STM32CubeIDE** 
 | L | ボールを投げる |
 | B | 吸引ファンの ON / OFF |
 
-主なファイル:
-
-- `Core/Src/main.c`: ボタンごとの動作
-- `Core/Src/PL_Motor.c`: ステッピングモーターの台形加減速、壁センサを使った制御
-- `Core/Src/PL_sensor.c`: 壁センサ（AD 変換）
-- `Core/Src/Pl_servo.c`: アーム用サーボ（RS204MD）の通信
-- `MySWEEP1.ioc`: CubeMX のピン・周辺機能の設定
-
-ボタンの状態は UART で受け取っています（115200bps）。
+プログラムの構成、ピンの割り当て、通信の形式は [機体の仕様書](../../docs/machine-spec.md) にまとめてあります。調整する値（速度・しきい値・アームの角度など）は、すべて `Core/Inc/config.h` にあります。
 
 ### 開き方
 
 1. STM32CubeIDE で「File → Import → Existing Projects into Workspace」を選び、`MySWEEP1` フォルダを指定する
 2. ビルドすると `Debug/` フォルダができます（Git には入りません）
 3. デバッグ設定（`.launch`）は各自の PC で作ってください（Git には入りません）
+
+STM32CubeIDE がなくても、`arm-none-eabi-gcc` があればビルドできます。
+
+```bash
+cd software/firmware/MySWEEP1
+make
+```
+
+走行の計算（`motion.c`）は、PC 上でテストできます。
+
+```bash
+make -C software/firmware/MySWEEP1/test
+```
 
 ## `remote_controller/` — リモコン（ESP32、Arduino）
 
