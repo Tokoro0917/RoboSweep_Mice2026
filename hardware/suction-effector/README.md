@@ -24,14 +24,13 @@
 
 ## ファイル
 
-| ファイル | 内容 |
-| --- | --- |
-| `robosweep_effector.stl` / `effector.py` | 吸着ユニット本体 |
-| `robosweep_impeller.stl` / `impeller.py` | インペラ |
-| `fit_test_p2s.stl` | はめあいの試験片（軸穴 1.0〜1.4mm、モーター穴 8.6〜8.9mm） |
+| ファイル | 内容 | 大きさ |
+| --- | --- | --- |
+| `robosweep_effector.stl` | 吸着ユニット本体（コーンの口を上にして印刷） | 約 92.8 × 92.4 × 59.6mm |
+| `robosweep_impeller.stl` | インペラ | Φ30 × 9.5mm |
+| `fit_test_p2s.stl` | はめあいの試験片（軸穴 1.0〜1.4mm、モーター穴 8.6〜8.9mm） | 98 × 16 × 9.5mm |
 
-> まだリポジトリに入っていません。このフォルダに置いてください。
-> `effector.py` / `impeller.py` で寸法（`SHAFT_D`・`MOTOR_D` など）を変えて STL を作り直せます。
+> 寸法を変えて STL を作り直すための `effector.py` / `impeller.py` は、まだリポジトリに入っていません。手に入ったらこのフォルダに置いてください。
 
 ## 印刷の条件
 
