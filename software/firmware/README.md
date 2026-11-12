@@ -47,4 +47,20 @@ make -C software/firmware/MySWEEP1/test
 - 50ms ごとに送信
 - 送り先の MAC アドレスは `receiverAddress` に書きます。機体を替えたら書き換えてください
 
-> 機体側で ESP-NOW を受信して STM32 に UART で渡すプログラムは、まだリポジトリに入っていません。
+## `robot_receiver/` — 機体に載せる受信用 ESP32（Arduino）
+
+リモコンから ESP-NOW で届いたボタンの状態を、STM32 に UART で渡すプログラムです。
+
+- XIAO ESP32C3 を想定しています。違うボードのときは、先頭の `PIN_UART_TX` を変えてください。
+- 配線：ESP32 の TX（D6）を STM32 の UART4_RX（PA1、J4 の 3 番）に、GND 同士もつなぎます。
+- 起動すると、USB シリアル（115200bps）にこの ESP32 の MAC アドレスを表示します。その値を、リモコンの `receiverAddress` に書いてください。
+- どのボタンでどう動くかは、`to_stm32_buttons()` で変えられます。
+
+| リモコン | 動作 |
+| --- | --- |
+| X / B | 前進 / 後退 |
+| Y / A | 左旋回 / 右旋回 |
+| F | つかむ |
+| R | ホームポジション |
+| L | 投げる |
+| Back | 吸引ファン ON / OFF |
