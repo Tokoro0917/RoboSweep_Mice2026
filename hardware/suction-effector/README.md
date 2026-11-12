@@ -28,12 +28,13 @@
 | --- | --- | --- |
 | `robosweep_effector_lower.stl` | **下の部品**：コーン + 吸着座 + 吸込口 Φ18 の板 | 92.4 × 92.4 × 38.4mm |
 | `robosweep_effector_upper.stl` | **上の部品**：インペラ室（スリット付き）+ 天井 + モーターのボス + 取り付けアーム | 67.3 × 41.3 × 21.2mm |
-| `robosweep_impeller_d1.3.stl` | インペラ（軸穴 Φ1.3）。**まずこれを使う** | Φ30 × 9.5mm |
-| `robosweep_impeller_d1.4.stl` | インペラ（軸穴 Φ1.4）。Φ1.3 でも軸が入らないとき | Φ30 × 9.5mm |
-| `robosweep_impeller_d1.5.stl` | インペラ（軸穴 Φ1.5）。印刷で細くなる分を多めに見込んだもの。ゆるければ接着する | Φ30 × 9.5mm |
-| `robosweep_impeller_d1.2.stl` | インペラ（元の軸穴 Φ1.2）。印刷すると細くなり、軸が入らなかった | Φ30 × 9.5mm |
+| `robosweep_impeller_d1.3.stl` | インペラ（軸穴 Φ1.3）。**まずこれを使う** | Φ30 × 8.5mm |
+| `robosweep_impeller_d1.4.stl` | インペラ（軸穴 Φ1.4）。Φ1.3 でも軸が入らないとき | Φ30 × 8.5mm |
+| `robosweep_impeller_d1.5.stl` | インペラ（軸穴 Φ1.5）。印刷で細くなる分を多めに見込んだもの。ゆるければ接着する | Φ30 × 8.5mm |
+| `robosweep_impeller_d1.2.stl` | インペラ（元の軸穴 Φ1.2）。印刷すると細くなり、軸が入らなかった | Φ30 × 8.5mm |
 | `fit_test_p2s.stl` | はめあいの試験片（軸穴 1.0〜1.4mm、モーター穴 8.6〜8.9mm） | 98 × 16 × 9.5mm |
 | `robosweep_effector_assembled.stl` | 上下を組み立てた形（確認用。**このままでは印刷できない**） | 約 92.8 × 92.4 × 59.6mm |
+| `robosweep_effector_original.stl` / `robosweep_impeller_original.stl` | 受け取ったままの元の形（直す前）。スクリプトはここから作り直す | — |
 | `tools/fix_parts.py` | インペラ室の天井の直しと、軸穴を広げたインペラを作るスクリプト | — |
 | `tools/split_effector.py` | 組み立てた形を上下に分けるスクリプト | — |
 | `tools/render_images.py` | `images/` の画像を作るスクリプト | — |
@@ -47,6 +48,7 @@
 > 組み立てた形のままだとインペラ室が閉じていて、印刷したあとにインペラを入れられません。そのため、吸込口の板の上面（インペラ室の床、z = 38.4mm）で上下に分けています。
 >
 > 元の STL では、取り付けアームの下面がインペラ室の中に 0.6mm はみ出していて、インペラ室の高さが 7.4mm（インペラは 7.0mm）しかありませんでした。はみ出しを削って、天井の高さを 8.0mm にそろえています（`tools/fix_parts.py`）。
+> インペラは、円板の上に出ているハブを 1mm 短くしています（高さ 9.5mm → 8.5mm。円板の上の出っ張りは 1.5mm）。
 > 寸法を変えて作り直すための `effector.py` / `impeller.py` は、まだリポジトリに入っていません。作り直したら、`python tools/fix_parts.py` と `python tools/split_effector.py robosweep_effector_assembled.stl .` を実行してください。
 
 ## 組み立て方
