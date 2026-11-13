@@ -1,2 +1,3 @@
 build/
 test/test_motion
+test/test_maze

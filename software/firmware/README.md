@@ -32,7 +32,7 @@ cd software/firmware/MySWEEP1
 make
 ```
 
-走行の計算（`ctl_motion.c`）と壁を見た補正（`ctl_wall.c`）は、PC 上でテストできます。
+走行の計算（`ctl_motion.c`）、壁を見た補正（`ctl_wall.c`）、迷路の地図と道順（`maze.c`）は、PC 上でテストできます。`maze.c` のテストは、でたらめな迷路 2000 個でボールの区画と投げる場所まで行けるかを確かめます。
 
 ```bash
 make -C software/firmware/MySWEEP1/test
