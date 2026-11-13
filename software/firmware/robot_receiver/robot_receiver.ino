@@ -10,7 +10,10 @@
  *
  * 2. 自律機が 2 台のとき、STM32 から届いた自分の位置を、もう 1 台の ESP32 に ESP-NOW で送る。
  *    もう 1 台から届いた位置は、先頭を 0xA6 にして STM32 に渡す。
- *      STM32 --UART--> この ESP32 --ESP-NOW（全員あて）--> もう 1 台の ESP32 --UART--> STM32
+ *      STM32 --UART--> この ESP32 --ESP-NOW--> もう 1 台の ESP32 --UART--> STM32
+ *
+ * ほかのチームの電波を取り違えないように、送ってきた相手の MAC アドレスを確かめる
+ * （REMOTE_MAC、ROBOT_MACS）。
  *      STM32 から届く形: 0xA5, 番号, x, y, 次の x, 次の y, 状態, チェック（XOR）
  *
  * STM32 側は software/firmware/MySWEEP1/Core/Src/drv_link.c
@@ -42,6 +45,24 @@ const uint32_t LINK_TIMEOUT_MS = 200;
 
 // STM32 に送る間隔 [ms]。STM32 は 500ms 届かないと止まるので、それより短くする。
 const uint32_t SEND_INTERVAL_MS = 50;
+
+// ------------------------------------------
+// 送ってきた相手を確かめる（ほかのチームの電波を取り違えないため）
+// MAC アドレスは、それぞれの ESP32 を起動したときに USB シリアルに表示される。
+// ------------------------------------------
+// リモコンの MAC アドレス（remote_controller.ino が "Remote MAC address" として表示する）。
+// すべて 0 のままだと、どこから届いたボタンも使う（前と同じ動き。起動時に注意を表示する）。
+const uint8_t REMOTE_MAC[6] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+
+// 自律機（2 台）の ESP32 の MAC アドレス（この ESP32 が "MAC address" として表示する）。
+// 2 台とも同じ内容を書き込んでよい（自分の分は自動でとばす）。
+// 位置は、ここに書いた相手にだけ送り、ここに書いた相手から届いたものだけを使う。
+// すべて 0 のままだと、位置は送りも受けもしない（自律機 2 台で動かすときは必ず書く）。
+const uint8_t ROBOT_MACS[2][6] = {
+  {0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // 1 台目（AUTO_ROBOT_ID 0）
+  {0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // 2 台目（AUTO_ROBOT_ID 1）
+};
+const int ROBOT_MAC_COUNT = 2;
 
 // ==========================================
 // STM32 側のボタンのビット（drv_link.h と同じ）
@@ -99,8 +120,31 @@ uint8_t peer_packet[POS_LEN];
 volatile bool peer_pending = false;
 volatile uint32_t peer_recv_count = 0;
 
-static void handle_data(const uint8_t *data, int len) {
+static bool is_zero_mac(const uint8_t *m) {
+  for (int i = 0; i < 6; i++) if (m[i] != 0) return false;
+  return true;
+}
+
+static bool same_mac(const uint8_t *a, const uint8_t *b) {
+  return memcmp(a, b, 6) == 0;
+}
+
+// 自律機の一覧に入っている相手か
+static bool is_robot(const uint8_t *mac) {
+  for (int i = 0; i < ROBOT_MAC_COUNT; i++) {
+    if (!is_zero_mac(ROBOT_MACS[i]) && same_mac(ROBOT_MACS[i], mac)) return true;
+  }
+  return false;
+}
+
+volatile uint32_t rejected_count = 0;   // 知らない相手から届いて捨てた数
+
+static void handle_data(const uint8_t *mac, const uint8_t *data, int len) {
   if (len == POS_LEN && data[0] == POS_HEADER) {
+    if (!is_robot(mac)) {
+      rejected_count++;
+      return;   // 自分たちの自律機ではない
+    }
     // もう 1 台の位置。loop() で STM32 に渡す
     memcpy(peer_packet, data, POS_LEN);
     peer_pending = true;
@@ -109,6 +153,10 @@ static void handle_data(const uint8_t *data, int len) {
   }
   if (len != (int)sizeof(struct_message)) {
     return;   // 形が違うデータは使わない
+  }
+  if (!is_zero_mac(REMOTE_MAC) && !same_mac(REMOTE_MAC, mac)) {
+    rejected_count++;
+    return;   // 自分たちのリモコンではない
   }
   struct_message m;
   memcpy(&m, data, sizeof(m));
@@ -120,13 +168,11 @@ static void handle_data(const uint8_t *data, int len) {
 // Arduino-ESP32 のバージョン 3 から、受信コールバックの引数が変わった
 #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
 void OnDataRecv(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
-  (void)info;
-  handle_data(data, len);
+  handle_data(info->src_addr, data, len);
 }
 #else
 void OnDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
-  (void)mac;
-  handle_data(data, len);
+  handle_data(mac, data, len);
 }
 #endif
 
@@ -138,9 +184,17 @@ void send_to_stm32(uint8_t buttons) {
   Serial1.write(packet, sizeof(packet));
 }
 
-// 自分の位置を、もう 1 台へ（全員あてに送る。リモコンの ESP32 は受け取っても使わない）
-const uint8_t BROADCAST[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+// 自分の位置を、もう 1 台へ（ROBOT_MACS に書いた相手のうち、自分以外にだけ送る）
+uint8_t my_mac[6];
 uint32_t pos_sent_count = 0;
+
+void send_position(const uint8_t *buf) {
+  for (int i = 0; i < ROBOT_MAC_COUNT; i++) {
+    if (is_zero_mac(ROBOT_MACS[i]) || same_mac(ROBOT_MACS[i], my_mac)) continue;
+    esp_now_send(ROBOT_MACS[i], buf, POS_LEN);
+    pos_sent_count++;
+  }
+}
 
 // STM32 から届くバイトを集めて、1 回分そろったら送る
 void read_from_stm32() {
@@ -157,8 +211,7 @@ void read_from_stm32() {
       uint8_t sum = 0;
       for (int i = 1; i < POS_LEN - 1; i++) sum ^= buf[i];
       if (sum == buf[POS_LEN - 1]) {
-        esp_now_send(BROADCAST, buf, POS_LEN);
-        pos_sent_count++;
+        send_position(buf);
       }
     }
   }
@@ -187,13 +240,26 @@ void setup() {
   }
   esp_now_register_recv_cb(OnDataRecv);
 
-  // 全員あて（もう 1 台の自律機へ位置を送る）
-  esp_now_peer_info_t peerInfo = {};
-  memcpy(peerInfo.peer_addr, BROADCAST, 6);
-  peerInfo.channel = WIFI_CHANNEL;
-  peerInfo.encrypt = false;
-  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-    Serial.println("ERR: esp_now_add_peer (broadcast)");
+  // もう 1 台の自律機を送り先に登録する（自分は登録しない）
+  WiFi.macAddress(my_mac);
+  int peers = 0;
+  for (int i = 0; i < ROBOT_MAC_COUNT; i++) {
+    if (is_zero_mac(ROBOT_MACS[i]) || same_mac(ROBOT_MACS[i], my_mac)) continue;
+    esp_now_peer_info_t peerInfo = {};
+    memcpy(peerInfo.peer_addr, ROBOT_MACS[i], 6);
+    peerInfo.channel = WIFI_CHANNEL;
+    peerInfo.encrypt = false;
+    if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+      Serial.println("ERR: esp_now_add_peer (robot)");
+    } else {
+      peers++;
+    }
+  }
+  if (is_zero_mac(REMOTE_MAC)) {
+    Serial.println("NOTE: REMOTE_MAC is not set. Buttons from any sender are used.");
+  }
+  if (peers == 0) {
+    Serial.println("NOTE: ROBOT_MACS is not set. Positions are not sent or received.");
   }
   Serial.println("Ready");
 }
@@ -230,9 +296,10 @@ void loop() {
 
   // 1 秒ごとに状態を USB シリアルに出す（確認用）
   if (now - last_log_ms >= 1000) {
-    Serial.printf("recv=%lu buttons=0x%02X pos_sent=%lu peer_recv=%lu %s\n",
+    Serial.printf("recv=%lu buttons=0x%02X pos_sent=%lu peer_recv=%lu rejected=%lu %s\n",
                   (unsigned long)recv_count, buttons,
                   (unsigned long)pos_sent_count, (unsigned long)peer_recv_count,
+                  (unsigned long)rejected_count,
                   (now - last_recv_ms > LINK_TIMEOUT_MS) ? "(no signal)" : "");
     last_log_ms = now;
   }
