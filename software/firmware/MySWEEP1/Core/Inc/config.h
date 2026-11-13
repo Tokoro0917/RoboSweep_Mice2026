@@ -135,15 +135,43 @@
  * 向きの番号: 0 = +x、1 = +y、2 = -x、3 = -y（左回りで 1 増える）。
  * 試合ごとに、公表されたスタート位置・ゲートの向き・ボールの位置に合わせて書き換える（規程 3-1、4-5）。
  */
-#ifndef AUTO_START_X   /* テストで外から変えられるようにしている */
-#define AUTO_START_X            0
-#define AUTO_START_Y            0
-#define AUTO_START_DIR          1   /* スタート区画でゲートの方を向いた向き */
+/*
+ * 自律機の台数と、この機体の番号。最終的には 2 台とも自律にする。
+ *   1 台のとき: その 1 台がボールを全部取る
+ *   2 台のとき: 1 台目（ID 0）と 2 台目（ID 1）で、スタート位置とボールを分ける
+ *               （同じボールを取りに行かないように。ぶつからないようにする工夫はまだない）
+ */
+#ifndef AUTO_ROBOT_COUNT   /* テストで外から変えられるようにしている */
+#define AUTO_ROBOT_COUNT        1
+#endif
+#ifndef AUTO_ROBOT_ID
+#define AUTO_ROBOT_ID           0
 #endif
 
-/* 自分の陣地のボールの区画（要設定） */
+/* スタート区画と、そこでゲートの方を向いた向き（要設定） */
+#ifndef AUTO_START_X
+#if AUTO_ROBOT_ID == 0
+#define AUTO_START_X            0
+#define AUTO_START_Y            0
+#define AUTO_START_DIR          1
+#else
+#define AUTO_START_X            0
+#define AUTO_START_Y            15
+#define AUTO_START_DIR          3
+#endif
+#endif
+
+/* この機体が取るボールの区画（要設定） */
+#if AUTO_ROBOT_COUNT == 1
 #define AUTO_BALL_COUNT         2
 #define AUTO_BALLS              { { 2, 5 }, { 5, 2 } }
+#elif AUTO_ROBOT_ID == 0
+#define AUTO_BALL_COUNT         1
+#define AUTO_BALLS              { { 5, 2 } }
+#else
+#define AUTO_BALL_COUNT         1
+#define AUTO_BALLS              { { 2, 5 } }
+#endif
 
 /* スタートゲート: 前に壁（ゲート）が見えている状態から、見えなくなってこの時間たったら走り出す */
 #define AUTO_GATE_SEEN_MS       500   /* まずゲートがこの時間見えていること */
