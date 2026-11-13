@@ -1,14 +1,19 @@
 /*
  * robot_receiver.ino
  *
- * 機体に載せる受信用 ESP32 のプログラム（Arduino）。
- * リモコン（remote_controller.ino）から ESP-NOW で届いたボタンの状態を、
- * 1 バイトにまとめて STM32 に UART で送る。
+ * 機体に載せる ESP32 のプログラム（Arduino）。
  *
- *   リモコン --ESP-NOW--> この ESP32 --UART 115200bps--> STM32（UART4）
+ * 1. リモコン（remote_controller.ino）から ESP-NOW で届いたボタンの状態を、
+ *    1 バイトにまとめて STM32 に UART で送る。
+ *      リモコン --ESP-NOW--> この ESP32 --UART 115200bps--> STM32（UART4）
+ *      STM32 に送る形: 0xAA, ボタン（1 バイト）, 0x55
  *
- * STM32 に送る形: 0xAA, ボタン（1 バイト）, 0x55
- * （STM32 側は software/firmware/MySWEEP1/Core/Src/drv_link.c）
+ * 2. 自律機が 2 台のとき、STM32 から届いた自分の位置を、もう 1 台の ESP32 に ESP-NOW で送る。
+ *    もう 1 台から届いた位置は、先頭を 0xA6 にして STM32 に渡す。
+ *      STM32 --UART--> この ESP32 --ESP-NOW（全員あて）--> もう 1 台の ESP32 --UART--> STM32
+ *      STM32 から届く形: 0xA5, 番号, x, y, 次の x, 次の y, 状態, チェック（XOR）
+ *
+ * STM32 側は software/firmware/MySWEEP1/Core/Src/drv_link.c
  *
  * 起動すると、この ESP32 の MAC アドレスを USB シリアル（115200bps）に表示する。
  * その値を remote_controller.ino の receiverAddress に書くこと。
@@ -24,7 +29,7 @@
 
 // STM32 とつなぐ UART のピン。XIAO ESP32C3 の TX=D6, RX=D7 を想定。
 // この ESP32 の TX を STM32 の UART4_RX（PA1、J4 の 3 番）に、
-// GND 同士をつなぐ。STM32 から受け取るものはないので RX はつながなくてよい。
+// GND 同士をつなぐ。自律機を 2 台で動かすときは、この ESP32 の RX を STM32 の UART4_TX（PA0、J4 の 1 番）にもつなぐ。
 const int PIN_UART_TX = D6;
 const int PIN_UART_RX = D7;
 const uint32_t UART_BAUD = 115200;
@@ -87,7 +92,21 @@ volatile uint8_t latest_buttons = 0;
 volatile uint32_t last_recv_ms = 0;
 volatile uint32_t recv_count = 0;
 
+// もう 1 台の自律機の位置（STM32 からの形と同じ 8 バイト、先頭 0xA5）
+const uint8_t POS_HEADER = 0xA5;
+const int POS_LEN = 8;
+uint8_t peer_packet[POS_LEN];
+volatile bool peer_pending = false;
+volatile uint32_t peer_recv_count = 0;
+
 static void handle_data(const uint8_t *data, int len) {
+  if (len == POS_LEN && data[0] == POS_HEADER) {
+    // もう 1 台の位置。loop() で STM32 に渡す
+    memcpy(peer_packet, data, POS_LEN);
+    peer_pending = true;
+    peer_recv_count++;
+    return;
+  }
   if (len != (int)sizeof(struct_message)) {
     return;   // 形が違うデータは使わない
   }
@@ -119,6 +138,32 @@ void send_to_stm32(uint8_t buttons) {
   Serial1.write(packet, sizeof(packet));
 }
 
+// 自分の位置を、もう 1 台へ（全員あてに送る。リモコンの ESP32 は受け取っても使わない）
+const uint8_t BROADCAST[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+uint32_t pos_sent_count = 0;
+
+// STM32 から届くバイトを集めて、1 回分そろったら送る
+void read_from_stm32() {
+  static uint8_t buf[POS_LEN];
+  static int n = 0;
+  while (Serial1.available()) {
+    uint8_t b = Serial1.read();
+    if (n == 0 && b != POS_HEADER) {
+      continue;   // 先頭を待つ
+    }
+    buf[n++] = b;
+    if (n == POS_LEN) {
+      n = 0;
+      uint8_t sum = 0;
+      for (int i = 1; i < POS_LEN - 1; i++) sum ^= buf[i];
+      if (sum == buf[POS_LEN - 1]) {
+        esp_now_send(BROADCAST, buf, POS_LEN);
+        pos_sent_count++;
+      }
+    }
+  }
+}
+
 // ==========================================
 // セットアップ
 // ==========================================
@@ -141,6 +186,15 @@ void setup() {
     return;
   }
   esp_now_register_recv_cb(OnDataRecv);
+
+  // 全員あて（もう 1 台の自律機へ位置を送る）
+  esp_now_peer_info_t peerInfo = {};
+  memcpy(peerInfo.peer_addr, BROADCAST, 6);
+  peerInfo.channel = WIFI_CHANNEL;
+  peerInfo.encrypt = false;
+  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+    Serial.println("ERR: esp_now_add_peer (broadcast)");
+  }
   Serial.println("Ready");
 }
 
@@ -158,6 +212,16 @@ void loop() {
     buttons = 0;
   }
 
+  // 自律機どうしの位置
+  read_from_stm32();
+  if (peer_pending) {
+    uint8_t out[POS_LEN];
+    memcpy(out, peer_packet, POS_LEN);
+    peer_pending = false;
+    out[0] = 0xA6;   // STM32 には「もう 1 台の位置」として渡す
+    Serial1.write(out, POS_LEN);
+  }
+
   // 押している間も離している間も、決まった間隔で送り続ける
   if (now - last_send_ms >= SEND_INTERVAL_MS) {
     send_to_stm32(buttons);
@@ -166,8 +230,9 @@ void loop() {
 
   // 1 秒ごとに状態を USB シリアルに出す（確認用）
   if (now - last_log_ms >= 1000) {
-    Serial.printf("recv=%lu buttons=0x%02X %s\n",
+    Serial.printf("recv=%lu buttons=0x%02X pos_sent=%lu peer_recv=%lu %s\n",
                   (unsigned long)recv_count, buttons,
+                  (unsigned long)pos_sent_count, (unsigned long)peer_recv_count,
                   (now - last_recv_ms > LINK_TIMEOUT_MS) ? "(no signal)" : "");
     last_log_ms = now;
   }
