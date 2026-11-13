@@ -182,6 +182,7 @@ static void reset_sim(void) {
 }
 
 /* 本当の迷路で a から b への最短の歩数（区画 skip は通らない）。行けなければ -1 */
+static int skip_balls;   /* 1 のとき、行き先以外のボールの区画も通らない */
 static int true_dist(int ax, int ay, int bx, int by, int skip_x, int skip_y, int path[][2], int *plen) {
 	static int dist[MAZE_SIZE][MAZE_SIZE], prev[MAZE_SIZE][MAZE_SIZE];
 	static int q[MAZE_SIZE * MAZE_SIZE][2];
@@ -194,6 +195,11 @@ static int true_dist(int ax, int ay, int bx, int by, int skip_x, int skip_y, int
 			int nx = x + DX[d], ny = y + DY[d];
 			if (!in(nx, ny) || twall(x, y, d) || !ours[nx][ny] || dist[nx][ny] >= 0) continue;
 			if (nx == skip_x && ny == skip_y) continue;
+			if (skip_balls && !(nx == bx && ny == by)) {
+				int is_ball = 0;
+				for (int i = 0; i < AUTO_BALL_COUNT; i++) if (BALLS[i][0] == nx && BALLS[i][1] == ny) is_ball = 1;
+				if (is_ball) continue;
+			}
 			dist[nx][ny] = dist[x][y] + 1; prev[nx][ny] = d;
 			q[t][0] = nx; q[t][1] = ny; t++;
 		}
@@ -269,9 +275,14 @@ static void run_trial(unsigned seed, int *done, int64_t *total_ms) {
 	if (bad_catch) FAIL("迷路 %u: つかむ位置がずれている", seed);
 	if (bad_throw) FAIL("迷路 %u: 投げる位置・向きが正しくない", seed);
 	if (auto_status() != AUTO_DONE && peer_on) {
+		/* もう 1 台とボールの区画を通らずに、自分のボールまで行けるか */
+		static const uint8_t owner2[AUTO_BALL_COUNT] = AUTO_BALL_OWNER;
 		int ok_path = 1;
+		skip_balls = 1;
 		for (int i = 0; i < AUTO_BALL_COUNT; i++)
-			if (true_dist(AUTO_START_X, AUTO_START_Y, BALLS[i][0], BALLS[i][1], peer_x, peer_y, NULL, NULL) < 0) ok_path = 0;
+			if ((AUTO_ROBOT_COUNT < 2 || owner2[i] == AUTO_ROBOT_ID)
+					&& true_dist(AUTO_START_X, AUTO_START_Y, BALLS[i][0], BALLS[i][1], peer_x, peer_y, NULL, NULL) < 0) ok_path = 0;
+		skip_balls = 0;
 		if (!ok_path) { blocked_ok++; return; }   /* もう 1 台が唯一の道をふさいでいる。待ち続けるのが正しい */
 	}
 	if (auto_status() != AUTO_DONE) { FAIL("迷路 %u: 終わらない（状態 %d、%d 回投げた）", seed, auto_status(), auto_throw_count()); return; }
@@ -285,6 +296,7 @@ static void run_trial(unsigned seed, int *done, int64_t *total_ms) {
 	*total_ms += now_ms - GATE_OPEN_MS;
 }
 
+#ifndef DBG_MAIN
 int main(void) {
 	int done = 0;
 	int64_t total = 0;
@@ -305,3 +317,4 @@ int main(void) {
 	printf(failures ? "\n%d 件失敗\n" : "\nすべて OK\n", failures);
 	return failures ? 1 : 0;
 }
+#endif

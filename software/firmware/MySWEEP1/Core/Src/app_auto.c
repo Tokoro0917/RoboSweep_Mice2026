@@ -189,6 +189,19 @@ static void face(dir_t d, state_t next) {
 	state = ST_TURN;
 }
 
+/*
+ * まだ見ていない側（スタート区画の後ろや、もう 1 台がいて見られなかった側）へ行きたいとき。
+ * 向いて壁を見てから決め直す。もう 1 台がいるなら、いなくなるまで待つ（ST_MOVE が待つ）。
+ */
+static int peer_blocks(cell_t n);
+static void look(dir_t d) {
+	if (peer_blocks(maze_neighbor(pos, d))) {
+		face(d, ST_MOVE);
+	} else {
+		face(d, ST_SETTLE);
+	}
+}
+
 static void start_state(state_t s) {
 	switch (s) {
 	case ST_MOVE: {
@@ -308,11 +321,15 @@ static void plan_goal(void) {
 		maze_flood(&b, 1);
 		int d = maze_next_dir(pos, heading);
 		if (d < 0) {
+			if (temp_avoid_on) {
+				state = ST_STUCK;   /* もう 1 台をよけたせいで行けない。plan() がよけるのをやめる */
+				return;
+			}
 			next_ball();   /* このボールには今は行けない。行けるボールに変える（なければ止まる） */
 			return;
 		}
 		if (!maze_known(pos, (dir_t)d)) {
-			face((dir_t)d, ST_SETTLE);   /* まだ見ていない側（スタート区画の後ろなど）。向いて見てから決め直す */
+			look((dir_t)d);
 			return;
 		}
 		cell_t n = maze_neighbor(pos, (dir_t)d);
@@ -372,7 +389,7 @@ static void plan_goal(void) {
 		return;   /* cleared なら、次の auto_loop() でもう一度 plan() する */
 	}
 	if (!maze_known(pos, (dir_t)d)) {
-		face((dir_t)d, ST_SETTLE);
+		look((dir_t)d);
 		return;
 	}
 	face((dir_t)d, ST_MOVE);
@@ -434,7 +451,8 @@ void auto_loop(void) {
 	case ST_WAIT_PEER: {
 		cell_t n = maze_neighbor(pos, heading);
 		if (!peer_blocks(n)) {
-			start_state(ST_MOVE);   /* 空いた */
+			t0 = now;            /* 空いた。壁を見直してから決め直す（もう 1 台がいて見られなかった側かもしれない） */
+			state = ST_SETTLE;
 			break;
 		}
 		/*
