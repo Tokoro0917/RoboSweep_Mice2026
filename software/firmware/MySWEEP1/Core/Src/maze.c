@@ -8,6 +8,7 @@
 /* 下位 4 ビット: 壁がある / 上位 4 ビット: 分かっている（ビットの位置は dir_t） */
 static uint8_t walls[MAZE_SIZE][MAZE_SIZE];
 static uint8_t visited[MAZE_SIZE][MAZE_SIZE];
+static uint8_t avoid[MAZE_SIZE][MAZE_SIZE];
 static uint16_t dist[MAZE_SIZE][MAZE_SIZE];
 
 static const int8_t DX[4] = { 1, 0, -1, 0 };
@@ -53,6 +54,7 @@ void maze_init(void) {
 		for (int y = 0; y < MAZE_SIZE; y++) {
 			walls[x][y] = 0;
 			visited[x][y] = 0;
+			avoid[x][y] = 0;
 			dist[x][y] = MAZE_DIST_INF;
 		}
 	}
@@ -86,6 +88,16 @@ void maze_mark_visited(cell_t c) {
 	if (maze_in_field(c.x, c.y)) {
 		visited[c.x][c.y] = 1;
 	}
+}
+
+void maze_set_avoid(cell_t c, int on) {
+	if (maze_in_field(c.x, c.y)) {
+		avoid[c.x][c.y] = (uint8_t)(on ? 1 : 0);
+	}
+}
+
+int maze_avoided(cell_t c) {
+	return maze_in_field(c.x, c.y) && avoid[c.x][c.y];
 }
 
 int maze_visited(cell_t c) {
@@ -134,6 +146,9 @@ void maze_flood(const cell_t *goals, int n) {
 			cell_t nb = maze_neighbor(c, (dir_t)d);
 			if (!maze_in_field(nb.x, nb.y) || maze_is_opponent(nb)) {
 				continue;
+			}
+			if (avoid[nb.x][nb.y] && dist[nb.x][nb.y] != 0) {
+				continue;   /* 通らない区画（ボールがある区画など）。行き先なら入れる */
 			}
 			if (dist[nb.x][nb.y] > next) {
 				dist[nb.x][nb.y] = next;

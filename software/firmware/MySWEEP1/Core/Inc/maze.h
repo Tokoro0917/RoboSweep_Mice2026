@@ -68,6 +68,10 @@ int maze_open(cell_t c, dir_t d);         /* 壁がないと分かっていれ�
  */
 void maze_update(cell_t c, dir_t heading, int left, int front, int right);
 void maze_mark_visited(cell_t c);
+
+/* 道順を決めるときに通らない区画（ボールがある区画など）。maze_init() で消える */
+void maze_set_avoid(cell_t c, int on);
+int maze_avoided(cell_t c);
 int maze_visited(cell_t c);
 
 /* 区画 c が相手陣地と分かっていれば 1（反対側の区画を通ったことがある） */
