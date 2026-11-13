@@ -2,3 +2,4 @@ build/
 test/test_motion
 test/test_maze
 test/test_auto
+test/test_auto_mid

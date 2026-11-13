@@ -71,6 +71,7 @@ void auto_init(void) {
 	gate_seen = 0;
 	t0 = time_ms();
 	state = ST_WAIT_GATE;
+	arm_home();   /* 電源を入れたあと、サーボのトルクを入れてアームをホームポジションにする */
 	for (int i = 0; i < AUTO_BALL_COUNT; i++) {
 		maze_set_avoid(ball_cell(i), 1);   /* ボールを押さないように、ボールの区画は通らない */
 	}
@@ -121,6 +122,9 @@ static void start_state(state_t s) {
 	case ST_THROW:
 		arm_throw();
 		break;
+	case ST_SETTLE:
+		t0 = time_ms();
+		break;
 	default:
 		break;
 	}
@@ -162,6 +166,10 @@ static void plan(void) {
 		int d = maze_next_dir(pos, heading);
 		if (d < 0) {
 			next_ball();   /* このボールには今は行けない。行けるボールに変える（なければ止まる） */
+			return;
+		}
+		if (!maze_known(pos, (dir_t)d)) {
+			face((dir_t)d, ST_SETTLE);   /* まだ見ていない側（スタート区画の後ろなど）。向いて見てから決め直す */
 			return;
 		}
 		cell_t n = maze_neighbor(pos, (dir_t)d);
@@ -220,6 +228,10 @@ static void plan(void) {
 		}
 		return;   /* cleared なら、次の auto_loop() でもう一度 plan() する */
 	}
+	if (!maze_known(pos, (dir_t)d)) {
+		face((dir_t)d, ST_SETTLE);
+		return;
+	}
 	face((dir_t)d, ST_MOVE);
 }
 
@@ -239,7 +251,7 @@ void auto_loop(void) {
 			t0 = now;
 		} else if (!gate_seen) {
 			t0 = now;   /* まだゲートを見ていない。見えるまで待つ */
-		} else if (now - t0 >= AUTO_GATE_OPEN_MS) {
+		} else if (now - t0 >= AUTO_GATE_OPEN_MS && !arm_is_busy()) {
 			sense();
 			next_ball();
 		}

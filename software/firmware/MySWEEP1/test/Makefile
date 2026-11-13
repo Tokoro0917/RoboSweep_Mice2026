@@ -7,10 +7,11 @@ MOTION_SRCS = test_motion.c fake_hw.c ../Core/Src/ctl_motion.c ../Core/Src/ctl_w
 MAZE_SRCS = test_maze.c sim_maze.c ../Core/Src/maze.c
 AUTO_SRCS = test_auto.c sim_maze.c fake_hw.c ../Core/Src/app_auto.c ../Core/Src/maze.c ../Core/Src/ctl_motion.c ../Core/Src/ctl_wall.c
 
-all: test_motion test_maze test_auto
+all: test_motion test_maze test_auto test_auto_mid
 	./test_motion
 	./test_maze
 	./test_auto
+	./test_auto_mid
 
 test_motion: $(MOTION_SRCS)
 	$(CC) $(CFLAGS) $(MOTION_SRCS) -lm -o $@
@@ -21,6 +22,10 @@ test_maze: $(MAZE_SRCS) sim_maze.h ../Core/Inc/maze.h
 test_auto: $(AUTO_SRCS) ../Core/Inc/maze.h ../Core/Inc/app_auto.h ../Core/Inc/config.h
 	$(CC) $(CFLAGS) $(AUTO_SRCS) -lm -o $@
 
+# スタート区画の後ろが内側（壁がない）の場合
+test_auto_mid: $(AUTO_SRCS) ../Core/Inc/maze.h ../Core/Inc/app_auto.h ../Core/Inc/config.h
+	$(CC) $(CFLAGS) -DAUTO_START_X=2 -DAUTO_START_Y=2 -DAUTO_START_DIR=1 $(AUTO_SRCS) -lm -o $@
+
 clean:
-	rm -f test_motion test_maze test_auto
+	rm -f test_motion test_maze test_auto test_auto_mid
 .PHONY: all clean

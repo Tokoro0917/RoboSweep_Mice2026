@@ -55,7 +55,9 @@ int arm_catch(void) { if (!arm_start(ARM_CATCH, 1500)) return 0; catches++;  if 
 int arm_carry(void) { return arm_start(ARM_CARRY, 1000); }
 static void report_throw(void);
 int arm_throw(void) { if (!arm_start(ARM_THROW, 1500)) return 0; if (!throw_ok()) { bad_throw++; report_throw(); } return 1; }
-int arm_home(void) { return arm_start(ARM_HOME, 1500); }
+static int homed;
+static uint32_t arm_until_home;
+int arm_home(void) { if (!arm_start(ARM_HOME, 1500)) return 0; if (!homed) arm_until_home = arm_until; homed = 1; return 1; }
 
 /* ---- 機体の位置（フィールドの座標 [mm]） ---- */
 static const int8_t BALLS[AUTO_BALL_COUNT][2] = AUTO_BALLS;
@@ -148,6 +150,8 @@ static void reset_sim(void) {
 	now_ms = 0;
 	arm_until = 0;
 	catches = bad_catch = bad_throw = 0;
+	homed = 0;
+	arm_until_home = 0;
 	for (int i = 0; i < AUTO_BALL_COUNT; i++) caught[i] = 0;
 	motion_init();
 	motion_reset_pose();
@@ -156,11 +160,12 @@ static void reset_sim(void) {
 static void run_trial(unsigned seed, int *done, int64_t *total_ms) {
 	make_maze(seed, 6);   /* AUTO_BALLS（x < 6）が自分の陣地に入るようにする */
 	sim_open(AUTO_START_X, AUTO_START_Y, AUTO_START_DIR);   /* ゲートの先は通れる */
+	sim_open(AUTO_START_X, AUTO_START_Y, (AUTO_START_DIR + 2) & 3);   /* 後ろが内側なら通れるようにする（見ていない側） */
 	reset_sim();
 	set_ir();
 	auto_init();
 	int px = AUTO_START_X, py = AUTO_START_Y;
-	int moved_before_gate = 0, pushed_noted = 0;
+	int moved_before_gate = 0, moved_before_home = 0, pushed_noted = 0;
 	for (now_ms = 1; now_ms < TIME_LIMIT_MS; now_ms++) {
 		set_ir();
 		motion_tick();
@@ -168,12 +173,15 @@ static void run_trial(unsigned seed, int *done, int64_t *total_ms) {
 		auto_loop();
 		field_pose();
 		int x = cur_cell_x(), y = cur_cell_y();
-		if (now_ms < GATE_OPEN_MS && (fabs(motion_speed()) > 0 || fabs(motion_turn_speed()) > 0)) moved_before_gate = 1;
+		int moving = fabs(motion_speed()) > 0 || fabs(motion_turn_speed()) > 0;
+		if (now_ms < GATE_OPEN_MS && moving) moved_before_gate = 1;
+		if (moving && (!homed || now_ms < arm_until_home)) moved_before_home = 1;
 		if (x != px || y != py) {
 			int d = -1;
 			for (int k = 0; k < 4; k++) if (px + DX[k] == x && py + DY[k] == y) d = k;
 			if (d < 0 || !in(x, y)) { FAIL("迷路 %u: 区画を飛ばした (%d,%d)→(%d,%d)", seed, px, py, x, y); return; }
 			if (twall(px, py, d)) { FAIL("迷路 %u: 壁を通り抜けた (%d,%d)→(%d,%d)", seed, px, py, x, y); return; }
+			if (!maze_open((cell_t){ (int8_t)px, (int8_t)py }, (dir_t)d)) { FAIL("迷路 %u: 見ていない壁の所を通った (%d,%d)→(%d,%d)", seed, px, py, x, y); return; }
 			if (!ours[x][y]) { FAIL("迷路 %u: 相手陣地に入った", seed); return; }
 			for (int i = 0; i < AUTO_BALL_COUNT; i++)
 				if (BALLS[i][0] == x && BALLS[i][1] == y && !caught[i] && maze_avoided((cell_t){ BALLS[i][0], BALLS[i][1] }))
@@ -186,6 +194,7 @@ static void run_trial(unsigned seed, int *done, int64_t *total_ms) {
 		if (st == AUTO_DONE || st == AUTO_STUCK) break;
 	}
 	if (moved_before_gate) FAIL("迷路 %u: ゲートが開く前に動いた", seed);
+	if (moved_before_home) FAIL("迷路 %u: アームをホームにする前に動いた", seed);
 	if (bad_catch) FAIL("迷路 %u: つかむ位置がずれている", seed);
 	if (bad_throw) FAIL("迷路 %u: 投げる位置・向きが正しくない", seed);
 	if (auto_status() != AUTO_DONE) { FAIL("迷路 %u: 終わらない（状態 %d、%d 回投げた）", seed, auto_status(), auto_throw_count()); return; }
@@ -194,17 +203,16 @@ static void run_trial(unsigned seed, int *done, int64_t *total_ms) {
 	*total_ms += now_ms - GATE_OPEN_MS;
 }
 
-#ifndef DBG
 int main(void) {
 	int done = 0;
 	int64_t total = 0;
 	const char *one = getenv("SEED");   /* SEED=5294 ./test_auto で 1 つだけ */
 	if (one) { run_trial((unsigned)atoi(one), &done, &total); }
 	else for (unsigned t = 0; t < TRIALS; t++) run_trial(5000 + t, &done, &total);
+	printf("スタート (%d,%d) 向き %d / ", AUTO_START_X, AUTO_START_Y, AUTO_START_DIR);
 	printf("迷路 %d 個: 全部投げて終わった %d（うち、ボールの区画を通らないと投げる場所に行けなかった %d）", TRIALS, done, pushed);
 	if (done) printf("（ゲートが開いてから平均 %.0f 秒）", (double)total / done / 1000.0);
 	printf("\n");
 	printf(failures ? "\n%d 件失敗\n" : "\nすべて OK\n", failures);
 	return failures ? 1 : 0;
 }
-#endif

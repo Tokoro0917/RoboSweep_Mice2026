@@ -135,9 +135,11 @@
  * 向きの番号: 0 = +x、1 = +y、2 = -x、3 = -y（左回りで 1 増える）。
  * 試合ごとに、公表されたスタート位置・ゲートの向き・ボールの位置に合わせて書き換える（規程 3-1、4-5）。
  */
+#ifndef AUTO_START_X   /* テストで外から変えられるようにしている */
 #define AUTO_START_X            0
 #define AUTO_START_Y            0
 #define AUTO_START_DIR          1   /* スタート区画でゲートの方を向いた向き */
+#endif
 
 /* 自分の陣地のボールの区画（要設定） */
 #define AUTO_BALL_COUNT         2
