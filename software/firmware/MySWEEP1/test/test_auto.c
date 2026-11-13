@@ -50,6 +50,7 @@ static int catch_ok(void);
 static int throw_ok(void);
 static int catches, bad_catch, bad_throw;
 static int pushed;   /* ボールを押してもよいことにした迷路の数 */
+static int blocked_ok;   /* もう 1 台が唯一の道をふさいでいて、待ち続けた迷路の数 */
 static int caught[AUTO_BALL_COUNT];
 int arm_catch(void) { if (!arm_start(ARM_CATCH, 1500)) return 0; catches++;  if (!catch_ok()) bad_catch++; return 1; }
 int arm_carry(void) { return arm_start(ARM_CARRY, 1000); }
@@ -58,6 +59,26 @@ int arm_throw(void) { if (!arm_start(ARM_THROW, 1500)) return 0; if (!throw_ok()
 static int homed;
 static uint32_t arm_until_home;
 int arm_home(void) { if (!arm_start(ARM_HOME, 1500)) return 0; if (!homed) arm_until_home = arm_until; homed = 1; return 1; }
+
+/*
+ * ---- にせのもう 1 台 ----
+ * TEST_PEER のとき、ボールまでの道の途中の区画に、もう 1 台が止まったままいる（故障した、など）。
+ * 機体はその区画に入らず、回り道があれば回り道をする。壁センサには、もう 1 台が壁のように見える。
+ */
+#include "drv_link.h"
+static int peer_on;
+static int peer_x = -1, peer_y = -1;
+static int peer_entered;
+int link_peer(link_peer_t *out) {
+	if (!peer_on) return 0;
+	out->id = AUTO_ROBOT_ID == 0 ? 1 : 0;
+	out->x = out->nx = (int8_t)peer_x;
+	out->y = out->ny = (int8_t)peer_y;
+	out->status = 1;
+	return 1;
+}
+static int sent_count;
+int link_send_self(const link_peer_t *self) { (void)self; sent_count++; return 1; }
 
 /* ---- 機体の位置（フィールドの座標 [mm]） ---- */
 static const int8_t BALLS[AUTO_BALL_COUNT][2] = AUTO_BALLS;
@@ -138,9 +159,12 @@ static void set_ir(void) {
 	err_deg -= 360.0 * floor((err_deg + 180.0) / 360.0);
 	double lat = -(fx - cx) * DY[d] + (fy - cy) * DX[d] + SENSOR_AHEAD_MM * sin(err_deg * M_PI / 180.0);
 	double vl = IR_CENTER_LEFT + IR_PER_MM * lat, vr = IR_CENTER_RIGHT - IR_PER_MM * lat;
-	fake_ir[IR_LEFT] = twall(x, y, l) ? (int32_t)(vl < 0 ? 0 : vl) : 0;
-	fake_ir[IR_RIGHT] = twall(x, y, r) ? (int32_t)(vr < 0 ? 0 : vr) : 0;
-	int front = twall(x, y, d);
+	int is_peer_l = peer_on && x + DX[l] == peer_x && y + DY[l] == peer_y;
+	int is_peer_r = peer_on && x + DX[r] == peer_x && y + DY[r] == peer_y;
+	int is_peer_f = peer_on && x + DX[d] == peer_x && y + DY[d] == peer_y;
+	fake_ir[IR_LEFT] = (twall(x, y, l) || is_peer_l) ? (int32_t)(vl < 0 ? 0 : vl) : 0;
+	fake_ir[IR_RIGHT] = (twall(x, y, r) || is_peer_r) ? (int32_t)(vr < 0 ? 0 : vr) : 0;
+	int front = twall(x, y, d) || is_peer_f;
 	if (now_ms < GATE_OPEN_MS && x == AUTO_START_X && y == AUTO_START_Y && d == AUTO_START_DIR) front = 1;   /* ゲート */
 	fake_ir[IR_FRONT_LEFT] = fake_ir[IR_FRONT_RIGHT] = front ? IR_WALL_FRONT + 200 : 0;
 }
@@ -157,11 +181,57 @@ static void reset_sim(void) {
 	motion_reset_pose();
 }
 
+/* 本当の迷路で a から b への最短の歩数（区画 skip は通らない）。行けなければ -1 */
+static int true_dist(int ax, int ay, int bx, int by, int skip_x, int skip_y, int path[][2], int *plen) {
+	static int dist[MAZE_SIZE][MAZE_SIZE], prev[MAZE_SIZE][MAZE_SIZE];
+	static int q[MAZE_SIZE * MAZE_SIZE][2];
+	for (int x = 0; x < MAZE_SIZE; x++) for (int y = 0; y < MAZE_SIZE; y++) dist[x][y] = -1;
+	int h = 0, t = 0;
+	dist[ax][ay] = 0; q[t][0] = ax; q[t][1] = ay; t++;
+	while (h < t) {
+		int x = q[h][0], y = q[h][1]; h++;
+		for (int d = 0; d < 4; d++) {
+			int nx = x + DX[d], ny = y + DY[d];
+			if (!in(nx, ny) || twall(x, y, d) || !ours[nx][ny] || dist[nx][ny] >= 0) continue;
+			if (nx == skip_x && ny == skip_y) continue;
+			dist[nx][ny] = dist[x][y] + 1; prev[nx][ny] = d;
+			q[t][0] = nx; q[t][1] = ny; t++;
+		}
+	}
+	if (dist[bx][by] < 0) return -1;
+	if (path) {
+		int n = dist[bx][by], x = bx, y = by;
+		*plen = n + 1;
+		for (int i = n; i >= 0; i--) {
+			path[i][0] = x; path[i][1] = y;
+			if (i > 0) { int d = prev[x][y]; x -= DX[d]; y -= DY[d]; }
+		}
+	}
+	return dist[bx][by];
+}
+
 static void run_trial(unsigned seed, int *done, int64_t *total_ms) {
 	make_maze(seed, 6);   /* AUTO_BALLS（x < 6）が自分の陣地に入るようにする */
 	sim_open(AUTO_START_X, AUTO_START_Y, AUTO_START_DIR);   /* ゲートの先は通れる */
 	sim_open(AUTO_START_X, AUTO_START_Y, (AUTO_START_DIR + 2) & 3);   /* 後ろが内側なら通れるようにする（見ていない側） */
 	reset_sim();
+	peer_on = 0;
+	peer_entered = 0;
+#ifdef TEST_PEER
+	{
+		/* 自分のボールのうち最初のものへの道の、4 区画目に置く（ボールの区画のすぐ隣は避ける） */
+		static const uint8_t owner[AUTO_BALL_COUNT] = AUTO_BALL_OWNER;
+		int bi = 0;
+		while (bi < AUTO_BALL_COUNT && AUTO_ROBOT_COUNT >= 2 && owner[bi] != AUTO_ROBOT_ID) bi++;
+		static int path[MAZE_SIZE * MAZE_SIZE][2];
+		int plen = 0;
+		if (true_dist(AUTO_START_X, AUTO_START_Y, BALLS[bi][0], BALLS[bi][1], -1, -1, path, &plen) >= 6) {
+			peer_x = path[3][0];
+			peer_y = path[3][1];
+			peer_on = 1;
+		}
+	}
+#endif
 	set_ir();
 	auto_init();
 	int px = AUTO_START_X, py = AUTO_START_Y;
@@ -183,6 +253,7 @@ static void run_trial(unsigned seed, int *done, int64_t *total_ms) {
 			if (twall(px, py, d)) { FAIL("迷路 %u: 壁を通り抜けた (%d,%d)→(%d,%d)", seed, px, py, x, y); return; }
 			if (!maze_open((cell_t){ (int8_t)px, (int8_t)py }, (dir_t)d)) { FAIL("迷路 %u: 見ていない壁の所を通った (%d,%d)→(%d,%d)", seed, px, py, x, y); return; }
 			if (!ours[x][y]) { FAIL("迷路 %u: 相手陣地に入った", seed); return; }
+			if (peer_on && x == peer_x && y == peer_y) { FAIL("迷路 %u: もう 1 台がいる区画 (%d,%d) に入った", seed, x, y); return; }
 			for (int i = 0; i < AUTO_BALL_COUNT; i++)
 				if (BALLS[i][0] == x && BALLS[i][1] == y && !caught[i] && maze_avoided((cell_t){ BALLS[i][0], BALLS[i][1] }))
 					{ FAIL("迷路 %u: ボールの区画 (%d,%d) に入った", seed, x, y); return; }
@@ -197,8 +268,19 @@ static void run_trial(unsigned seed, int *done, int64_t *total_ms) {
 	if (moved_before_home) FAIL("迷路 %u: アームをホームにする前に動いた", seed);
 	if (bad_catch) FAIL("迷路 %u: つかむ位置がずれている", seed);
 	if (bad_throw) FAIL("迷路 %u: 投げる位置・向きが正しくない", seed);
+	if (auto_status() != AUTO_DONE && peer_on) {
+		int ok_path = 1;
+		for (int i = 0; i < AUTO_BALL_COUNT; i++)
+			if (true_dist(AUTO_START_X, AUTO_START_Y, BALLS[i][0], BALLS[i][1], peer_x, peer_y, NULL, NULL) < 0) ok_path = 0;
+		if (!ok_path) { blocked_ok++; return; }   /* もう 1 台が唯一の道をふさいでいる。待ち続けるのが正しい */
+	}
 	if (auto_status() != AUTO_DONE) { FAIL("迷路 %u: 終わらない（状態 %d、%d 回投げた）", seed, auto_status(), auto_throw_count()); return; }
-	if (auto_throw_count() != AUTO_BALL_COUNT) { FAIL("迷路 %u: 投げた数が %d", seed, auto_throw_count()); return; }
+	{
+		static const uint8_t owner[AUTO_BALL_COUNT] = AUTO_BALL_OWNER;
+		int mine = 0;
+		for (int i = 0; i < AUTO_BALL_COUNT; i++) if (AUTO_ROBOT_COUNT < 2 || owner[i] == AUTO_ROBOT_ID) mine++;
+		if (auto_throw_count() != mine) { FAIL("迷路 %u: 投げた数が %d（%d 個のはず）", seed, auto_throw_count(), mine); return; }
+	}
 	(*done)++;
 	*total_ms += now_ms - GATE_OPEN_MS;
 }
@@ -209,9 +291,16 @@ int main(void) {
 	const char *one = getenv("SEED");   /* SEED=5294 ./test_auto で 1 つだけ */
 	if (one) { run_trial((unsigned)atoi(one), &done, &total); }
 	else for (unsigned t = 0; t < TRIALS; t++) run_trial(5000 + t, &done, &total);
-	printf("スタート (%d,%d) 向き %d / ", AUTO_START_X, AUTO_START_Y, AUTO_START_DIR);
+	printf("スタート (%d,%d) 向き %d%s / ", AUTO_START_X, AUTO_START_Y, AUTO_START_DIR,
+#ifdef TEST_PEER
+			"、道の途中にもう 1 台が止まっている"
+#else
+			""
+#endif
+			);
 	printf("迷路 %d 個: 全部投げて終わった %d（うち、ボールの区画を通らないと投げる場所に行けなかった %d）", TRIALS, done, pushed);
 	if (done) printf("（ゲートが開いてから平均 %.0f 秒）", (double)total / done / 1000.0);
+	if (blocked_ok) printf("、もう 1 台が唯一の道をふさいでいて待ち続けた %d", blocked_ok);
 	printf("\n");
 	printf(failures ? "\n%d 件失敗\n" : "\nすべて OK\n", failures);
 	return failures ? 1 : 0;

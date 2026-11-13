@@ -138,8 +138,8 @@
 /*
  * 自律機の台数と、この機体の番号。最終的には 2 台とも自律にする。
  *   1 台のとき: その 1 台がボールを全部取る
- *   2 台のとき: 1 台目（ID 0）と 2 台目（ID 1）で、スタート位置とボールを分ける
- *               （同じボールを取りに行かないように。ぶつからないようにする工夫はまだない）
+ *   2 台のとき: 1 台目（ID 0）と 2 台目（ID 1）で、スタート位置とボールを分ける。
+ *               ESP32 どうしで今いる区画を伝え合い、もう 1 台がいる区画には入らない（app_auto.c）
  */
 #ifndef AUTO_ROBOT_COUNT   /* テストで外から変えられるようにしている */
 #define AUTO_ROBOT_COUNT        1
@@ -161,17 +161,16 @@
 #endif
 #endif
 
-/* この機体が取るボールの区画（要設定） */
-#if AUTO_ROBOT_COUNT == 1
+/* 自分の陣地のボールの区画（要設定）。どの機体もボールの区画は通らない（ボールを押さないため） */
 #define AUTO_BALL_COUNT         2
 #define AUTO_BALLS              { { 2, 5 }, { 5, 2 } }
-#elif AUTO_ROBOT_ID == 0
-#define AUTO_BALL_COUNT         1
-#define AUTO_BALLS              { { 5, 2 } }
-#else
-#define AUTO_BALL_COUNT         1
-#define AUTO_BALLS              { { 2, 5 } }
-#endif
+/* 2 台のとき、それぞれのボールを取る機体の番号（AUTO_BALLS と同じ順）。1 台のときは全部取る */
+#define AUTO_BALL_OWNER         { 1, 0 }
+
+/* もう 1 台の自律機（AUTO_ROBOT_COUNT が 2 のとき） */
+#define PEER_TIMEOUT_MS         500   /* これより長く位置が届かなければ、もう 1 台はいないものとする */
+#define AUTO_SEND_INTERVAL_MS   100   /* 自分の位置を送る間隔（変わったときはすぐ送る） */
+#define AUTO_PEER_WAIT_MS       3000  /* 行きたい区画にもう 1 台がいるとき、これだけ待っても空かなければ回り道する */
 
 /* スタートゲート: 前に壁（ゲート）が見えている状態から、見えなくなってこの時間たったら走り出す */
 #define AUTO_GATE_SEEN_MS       500   /* まずゲートがこの時間見えていること */
