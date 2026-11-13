@@ -382,6 +382,16 @@ void auto_loop(void) {
 	uint32_t now = time_ms();
 	send_self(now);
 
+	/* よけていた区画から、もう 1 台がいなくなったら、よけるのをやめる */
+	if (temp_avoid_on) {
+		cell_t pc, pn;
+		uint8_t id;
+		if (!peer_cell(&pc, &pn, &id) || (!same(pc, temp_avoid) && !same(pn, temp_avoid))) {
+			maze_set_avoid(temp_avoid, 0);
+			temp_avoid_on = 0;
+		}
+	}
+
 	switch (state) {
 	case ST_WAIT_GATE:
 		/* ゲートが見えている状態が続いたあと、見えなくなって AUTO_GATE_OPEN_MS たったら走り出す */
@@ -416,10 +426,6 @@ void auto_loop(void) {
 		if (!motion_is_busy()) {
 			pos = maze_neighbor(pos, heading);
 			next_cell = pos;
-			if (temp_avoid_on) {
-				maze_set_avoid(temp_avoid, 0);   /* 回り道を 1 区画進んだので、よけるのをやめる */
-				temp_avoid_on = 0;
-			}
 			t0 = now;
 			state = ST_SETTLE;
 		}
