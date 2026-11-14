@@ -118,6 +118,77 @@
 #define LINK_TIMEOUT_MS         500
 
 /* ================================================================== */
+/* 動かし方（自律機とリモコン機はハードが同じ。ここだけ変えて書き込む）     */
+/* ================================================================== */
+#define ROBOT_MODE_REMOTE       0   /* リモコンで操作する */
+#define ROBOT_MODE_AUTO         1   /* 自律で動く（app_auto.c） */
+#ifndef ROBOT_MODE   /* make CFLAGS_EXTRA=-DROBOT_MODE=1 のように外からも決められる */
+#define ROBOT_MODE              ROBOT_MODE_REMOTE
+#endif
+
+/* ================================================================== */
+/* 自律走行（ROBOT_MODE_AUTO のときだけ使う）                           */
+/* ================================================================== */
+/*
+ * 区画の座標 (x, y) は 0〜15。フィールドの角の 1 つを (0, 0) にし、
+ * そこから x 方向・y 方向に数える（相手陣地は (15-x, 15-y) の点対称になる）。
+ * 向きの番号: 0 = +x、1 = +y、2 = -x、3 = -y（左回りで 1 増える）。
+ * 試合ごとに、公表されたスタート位置・ゲートの向き・ボールの位置に合わせて書き換える（規程 3-1、4-5）。
+ */
+/*
+ * 自律機の台数と、この機体の番号。最終的には 2 台とも自律にする。
+ *   1 台のとき: その 1 台がボールを全部取る
+ *   2 台のとき: 1 台目（ID 0）と 2 台目（ID 1）で、スタート位置とボールを分ける。
+ *               ESP32 どうしで今いる区画を伝え合い、もう 1 台がいる区画には入らない（app_auto.c）
+ */
+#ifndef AUTO_ROBOT_COUNT   /* テストで外から変えられるようにしている */
+#define AUTO_ROBOT_COUNT        1
+#endif
+#ifndef AUTO_ROBOT_ID
+#define AUTO_ROBOT_ID           0
+#endif
+
+/* スタート区画と、そこでゲートの方を向いた向き（要設定） */
+#ifndef AUTO_START_X
+#if AUTO_ROBOT_ID == 0
+#define AUTO_START_X            0
+#define AUTO_START_Y            0
+#define AUTO_START_DIR          1
+#else
+#define AUTO_START_X            0
+#define AUTO_START_Y            15
+#define AUTO_START_DIR          3
+#endif
+#endif
+
+/* 自分の陣地のボールの区画（要設定）。どの機体もボールの区画は通らない（ボールを押さないため） */
+#define AUTO_BALL_COUNT         2
+#define AUTO_BALLS              { { 2, 5 }, { 5, 2 } }
+/* 2 台のとき、それぞれのボールを取る機体の番号（AUTO_BALLS と同じ順）。1 台のときは全部取る */
+#define AUTO_BALL_OWNER         { 1, 0 }
+
+/* もう 1 台の自律機（AUTO_ROBOT_COUNT が 2 のとき） */
+#define PEER_TIMEOUT_MS         500   /* これより長く位置が届かなければ、もう 1 台はいないものとする */
+#define AUTO_SEND_INTERVAL_MS   100   /* 自分の位置を送る間隔（変わったときはすぐ送る） */
+#define AUTO_PEER_WAIT_MS       3000  /* 行きたい区画にもう 1 台がいるとき、これだけ待っても空かなければ回り道する */
+
+/* スタートゲート: 前に壁（ゲート）が見えている状態から、見えなくなってこの時間たったら走り出す */
+#define AUTO_GATE_SEEN_MS       500   /* まずゲートがこの時間見えていること */
+#define AUTO_GATE_OPEN_MS       300
+
+/* 区画を走る速さ */
+#define AUTO_SPEED              300.0f  /* mm/s */
+#define AUTO_ACCEL              1000.0f /* mm/s^2 */
+#define AUTO_TURN_SPEED         270.0f  /* deg/s */
+#define AUTO_TURN_ACCEL         1500.0f /* deg/s^2 */
+
+/*
+ * ボールの区画の隣の区画の中央から、ボールの方へ進んでからつかむ距離（要確認）。
+ * CAD では、つかむ姿勢のボールの中心は車軸から約 119mm 前 → 180 - 119 = 61mm。
+ */
+#define AUTO_APPROACH_MM        61.0f
+
+/* ================================================================== */
 /* アーム（RS204MD）  角度は 0.1deg 単位、時間は 10ms 単位               */
 /* ================================================================== */
 #define SERVO_ID_LOWER          1   /* 根元 */

@@ -111,6 +111,10 @@ void setup() {
 
   // ESP-NOWの初期化
   WiFi.mode(WIFI_STA);
+  delay(100);
+  // このリモコンの MAC アドレス。robot_receiver.ino の REMOTE_MAC に書く
+  Serial.print("Remote MAC address: ");
+  Serial.println(WiFi.macAddress());
   if (esp_now_init() != ESP_OK) {
     lcd_cmd(0x80); lcd_print("ERR:WIFI");
     return;

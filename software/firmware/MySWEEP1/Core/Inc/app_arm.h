@@ -17,6 +17,7 @@ void arm_update(void);
 int arm_catch(void);   /* 下ろしてつかむ → ファン ON */
 int arm_home(void);    /* ホームポジション → ファン OFF */
 int arm_throw(void);   /* 投げる */
+int arm_carry(void);   /* つかんだまま「構える」姿勢へ持ち上げる（ファンは ON のまま） */
 
 int arm_is_busy(void);
 

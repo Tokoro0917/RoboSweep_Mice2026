@@ -10,9 +10,12 @@
  *   Back    : ファン ON / OFF
  * リモコンの信号が LINK_TIMEOUT_MS 途切れたら止まる。
  *
+ * config.h の ROBOT_MODE を ROBOT_MODE_AUTO にすると、リモコンの代わりに自律で動く（app_auto.c）。
+ *
  * LED
  *   LED_1  : 動作中は 1 秒ごとに点滅。電池が少ないと速く点滅
  *   LED_2  : リモコンの信号が届いている間は点灯
+ *            （自律のとき: ゲート待ちは点灯、走行中は消灯、終わったら速く点滅、行き詰まったらゆっくり点滅）
  *   LED_T1 : モーターを励磁している間は点灯
  *
  * ログ（USART2、115200bps、LOG_INTERVAL_MS ごと）
@@ -33,8 +36,8 @@
 #include "drv_led.h"
 #include "ctl_motion.h"
 #include "app_arm.h"
+#include "app_auto.h"
 
-static uint8_t prev_buttons = 0;
 static uint32_t battery_low_ms = 0;
 static int battery_low = 0;
 
@@ -45,6 +48,9 @@ void app_init(void) {
 	motion_init();
 	arm_init();
 	link_init();
+#if ROBOT_MODE == ROBOT_MODE_AUTO
+	auto_init();
+#endif
 #if LOG_ENABLE
 	printf("\r\nMySWEEP1 start\r\n");
 	printf("ms,batt_mv,ir_fr,ir_r,ir_l,ir_fl,x_mm,y_mm,theta_x10,v,w,btn\r\n");
@@ -59,6 +65,9 @@ void app_control_tick(void) {
 /* ------------------------------------------------------------------ */
 /* リモコン                                                             */
 /* ------------------------------------------------------------------ */
+#if ROBOT_MODE != ROBOT_MODE_AUTO
+static uint8_t prev_buttons = 0;
+
 static int is_drive(uint8_t b) {
 	return b == LINK_BTN_UP || b == LINK_BTN_DOWN || b == LINK_BTN_LEFT || b == LINK_BTN_RIGHT;
 }
@@ -99,6 +108,7 @@ static void remote_control(uint8_t b) {
 		stepper_disable();
 	}
 }
+#endif
 
 /* ------------------------------------------------------------------ */
 /* 状態の表示                                                           */
@@ -118,7 +128,16 @@ static void update_battery(uint32_t now) {
 static void update_leds(uint32_t now) {
 	uint32_t period = battery_low ? 200 : 1000;
 	led_set(LED_1, (now % period) < period / 2);
+#if ROBOT_MODE == ROBOT_MODE_AUTO
+	switch (auto_status()) {
+	case AUTO_WAIT_GATE: led_set(LED_2, 1); break;
+	case AUTO_RUNNING:   led_set(LED_2, 0); break;
+	case AUTO_DONE:      led_set(LED_2, (now % 200) < 100); break;
+	case AUTO_STUCK:     led_set(LED_2, (now % 1000) < 500); break;
+	}
+#else
 	led_set(LED_2, link_is_alive());
+#endif
 	led_set(LED_T1, stepper_is_enabled());
 }
 
@@ -145,7 +164,11 @@ static void log_status(uint32_t now) {
 void app_loop(void) {
 	uint32_t now = time_ms();
 
+#if ROBOT_MODE == ROBOT_MODE_AUTO
+	auto_loop();
+#else
 	remote_control(link_buttons());
+#endif
 	arm_update();
 
 	update_battery(now);

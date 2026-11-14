@@ -195,6 +195,9 @@ void motion_init(void) {
 	for (int i = 0; i < STEPPER_COUNT; i++) {
 		prev_steps[i] = stepper_get_steps((stepper_id_t)i);
 	}
+	total_distance = 0.0f;
+	total_angle = 0.0f;
+	wall_on = 0;
 	motion_reset_pose();
 	motion_stop();
 }

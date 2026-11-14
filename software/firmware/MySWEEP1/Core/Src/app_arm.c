@@ -53,6 +53,15 @@ static const step_t SEQ_THROW[] = {
 	{ ACT_END, 0, 0, 0 },
 };
 
+/* 持ち上げて運ぶ: 投げる前の「構える」姿勢にする。ファンは ON のまま（自律走行用） */
+static const step_t SEQ_CARRY[] = {
+	{ ACT_TORQUE_ON, 0, 0, 0 },
+	{ ACT_MOVE, SERVO_ID_UPPER, ARM_THROW_READY_UPPER, ARM_THROW_READY_TIME },
+	{ ACT_MOVE, SERVO_ID_LOWER, ARM_THROW_READY_LOWER, ARM_THROW_READY_TIME },
+	{ ACT_WAIT, ARM_THROW_READY_WAIT_MS, 0, 0 },
+	{ ACT_END, 0, 0, 0 },
+};
+
 static const step_t *seq = NULL;
 static int step_index = 0;
 static uint32_t wait_until = 0;
@@ -76,6 +85,7 @@ static int start(const step_t *s) {
 int arm_catch(void) { return start(SEQ_CATCH); }
 int arm_home(void)  { return start(SEQ_HOME); }
 int arm_throw(void) { return start(SEQ_THROW); }
+int arm_carry(void) { return start(SEQ_CARRY); }
 
 int arm_is_busy(void) {
 	return seq != NULL;

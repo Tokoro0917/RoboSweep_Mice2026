@@ -18,7 +18,7 @@ INCS    = -ICore/Inc \
           -IDrivers/STM32F4xx_HAL_Driver/Inc/Legacy \
           -IDrivers/CMSIS/Device/ST/STM32F4xx/Include \
           -IDrivers/CMSIS/Include
-CFLAGS  = $(MCU) $(DEFS) $(INCS) -std=gnu11 -g3 -O0 -Wall \
+CFLAGS  = $(MCU) $(DEFS) $(INCS) $(CFLAGS_EXTRA) -std=gnu11 -g3 -O0 -Wall \
           -ffunction-sections -fdata-sections -MMD -MP
 LDFLAGS = $(MCU) -TSTM32F446RETX_FLASH.ld --specs=nosys.specs --specs=nano.specs \
           -Wl,--gc-sections -Wl,-Map=$(BUILD)/$(TARGET).map -u _printf_float -lm
