@@ -114,6 +114,9 @@
 #define REMOTE_TURN_ACCEL       1000.0f /* deg/s^2 */
 #define REMOTE_WALL_CONTROL     1       /* 前進中に横の壁で補正する */
 
+/* カメラの結果がこれより古ければ使わない [ms] */
+#define BALL_TIMEOUT_MS         300
+
 /* 受信用 ESP32 から何も届かない時間がこれを超えたら止まる。0 で無効 */
 #define LINK_TIMEOUT_MS         500
 

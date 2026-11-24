@@ -89,6 +89,25 @@ make -C software/firmware/MySWEEP1/test
   - `ROBOT_MACS`: 自律機 2 台の ESP32 の MAC アドレス。位置は、ここに書いた相手にだけ送り、ここに書いた相手から届いたものだけを使います。すべて 0 のままだと、位置は送りも受けもしません。2 台とも同じ内容を書き込んでかまいません。
   - USB シリアルの `rejected=` が、知らない相手から届いて捨てた数です。
 
+### カメラでボールを探す（XIAO ESP32S3 Sense、Issue #8）
+
+自律機では、受信用の XIAO ESP32C3 の代わりに **XIAO ESP32S3 Sense** を使い、同じプログラム（`robot_receiver.ino`）でリモコン受信・もう 1 台との通信・カメラをまとめて行います（基板の拡張ヘッダで使える UART が 1 つしかないため）。
+
+- `robot_receiver.ino` の先頭の `HAS_CAMERA` を 1 にし、Arduino IDE でボード「XIAO_ESP32S3」、PSRAM を有効にして書き込みます（C3 では 0 のまま）。
+- 画像（160×120）から黄色い塊を探し、いちばん大きいもの（いちばん近いボール）の向きと距離を STM32 に送ります。計算は `ball_detect.h` にあり、PC でテストできます。
+
+```bash
+make -C software/firmware/robot_receiver/test
+```
+
+- STM32 のログ（115200bps）の最後の 3 列が、カメラの結果（見えたか、向き [deg]、距離 [cm]）です。
+- **実機で合わせること**
+  1. ボールが見えるのに `ball=0` のままなら、`CAM_SWAP_BYTES` を 0 にしてみる（画像のバイトの順番）。
+  2. ボールを 1 区画先（約 18cm）と 2 区画先（約 36cm）に置き、USB シリアルの `cm=` が合うように `ball_detect.h` の `BALL_CAM_HFOV_DEG`（横の画角）を変える。
+  3. 照明を変えても、壁（白・赤）や床（黒）に反応しないか見る。反応するときは `BALL_HUE_*`・`BALL_SAT_MIN`・`BALL_VAL_MIN` を変える。
+- USB シリアルに 1 秒ごとに、1 秒の枚数（`fps=`）と 1 枚にかかった時間（`frame_ms=`）が出ます。
+- このプログラムは Arduino でのビルドをまだ確かめていません（ESP32 の部分をにせものに置き換えて、文法だけ確かめました）。
+
 | リモコン | 動作 |
 | --- | --- |
 | X / B | 前進 / 後退 |

@@ -19,7 +19,8 @@
  *   LED_T1 : モーターを励磁している間は点灯
  *
  * ログ（USART2、115200bps、LOG_INTERVAL_MS ごと）
- *   ms,電池[mV],前右,右,左,前左,x[mm],y[mm],角度[0.1deg],速さ[mm/s],回転[deg/s],ボタン
+ *   ms,電池[mV],前右,右,左,前左,x[mm],y[mm],角度[0.1deg],速さ[mm/s],回転[deg/s],ボタン,
+ *   ボール（0 = 見えない / 1 = 見えた / 2 = 端で切れている / - = カメラから届いていない）,向き[deg],距離[cm]
  *   （CubeIDE の初期設定では printf で小数を出せないので、すべて整数で出す）
  */
 
@@ -53,7 +54,7 @@ void app_init(void) {
 #endif
 #if LOG_ENABLE
 	printf("\r\nMySWEEP1 start\r\n");
-	printf("ms,batt_mv,ir_fr,ir_r,ir_l,ir_fl,x_mm,y_mm,theta_x10,v,w,btn\r\n");
+	printf("ms,batt_mv,ir_fr,ir_r,ir_l,ir_fl,x_mm,y_mm,theta_x10,v,w,btn,ball,ball_deg,ball_cm\r\n");
 #endif
 }
 
@@ -149,13 +150,20 @@ static void log_status(uint32_t now) {
 	}
 	last = now;
 	pose_t p = motion_pose();
-	printf("%lu,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%02X\r\n",
+	link_ball_t b;
+	int have_ball = link_ball(&b);
+	printf("%lu,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%02X,",
 			(unsigned long)now, (long)(battery_voltage() * 1000.0f),
 			(long)ir_get(IR_FRONT_RIGHT), (long)ir_get(IR_RIGHT),
 			(long)ir_get(IR_LEFT), (long)ir_get(IR_FRONT_LEFT),
 			(long)p.x, (long)p.y, (long)(p.theta * 10.0f),
 			(long)motion_speed(), (long)motion_turn_speed(),
 			link_buttons());
+	if (have_ball) {
+		printf("%u,%d,%u\r\n", b.found, b.deg, b.cm);
+	} else {
+		printf("-,,\r\n");
+	}
 #else
 	(void)now;
 #endif

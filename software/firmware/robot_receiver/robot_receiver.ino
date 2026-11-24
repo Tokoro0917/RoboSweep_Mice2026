@@ -12,6 +12,11 @@
  *    もう 1 台から届いた位置は、先頭を 0xA6 にして STM32 に渡す。
  *      STM32 --UART--> この ESP32 --ESP-NOW--> もう 1 台の ESP32 --UART--> STM32
  *
+ * 3. HAS_CAMERA を 1 にすると（XIAO ESP32S3 Sense）、カメラで黄色いボールを探し、結果を STM32 に送る。
+ *      STM32 に送る形: 0xB0, 見つけたか, 向き[deg], 距離[cm], 大きさ[画素], 番号, チェック（XOR）
+ *    ボールを見つける計算は ball_detect.h（PC でテストできる）。
+ *    C3 など、カメラのないボードでは HAS_CAMERA を 0 にする（1 と 2 だけ動く）。
+ *
  * ほかのチームの電波を取り違えないように、送ってきた相手の MAC アドレスを確かめる
  * （REMOTE_MAC、ROBOT_MACS）。
  *      STM32 から届く形: 0xA5, 番号, x, y, 次の x, 次の y, 状態, チェック（XOR）
@@ -25,6 +30,15 @@
 #include <WiFi.h>
 #include <esp_now.h>
 #include <esp_wifi.h>
+
+// カメラを使うか。XIAO ESP32S3 Sense は 1、XIAO ESP32C3 は 0。
+// 1 のときは Arduino IDE で ボード「XIAO_ESP32S3」、PSRAM を有効（OPI PSRAM）にする。
+#define HAS_CAMERA 0
+
+#if HAS_CAMERA
+#include "esp_camera.h"
+#include "ball_detect.h"
+#endif
 
 // ==========================================
 // 設定（ボードや配線が違うときはここを変える）
@@ -217,6 +231,121 @@ void read_from_stm32() {
   }
 }
 
+#if HAS_CAMERA
+// ==========================================
+// カメラでボールを探す（別のタスクで動かし、loop() を待たせない）
+// ==========================================
+// XIAO ESP32S3 Sense のカメラのピン（Seeed の wiki の表より。PWDN / RESET はつながっていない）
+#define CAM_PIN_PWDN  -1
+#define CAM_PIN_RESET -1
+#define CAM_PIN_XCLK  10
+#define CAM_PIN_SIOD  40
+#define CAM_PIN_SIOC  39
+#define CAM_PIN_D7    48   // Y9
+#define CAM_PIN_D6    11   // Y8
+#define CAM_PIN_D5    12   // Y7
+#define CAM_PIN_D4    14   // Y6
+#define CAM_PIN_D3    16   // Y5
+#define CAM_PIN_D2    18   // Y4
+#define CAM_PIN_D1    17   // Y3
+#define CAM_PIN_D0    15   // Y2
+#define CAM_PIN_VSYNC 38
+#define CAM_PIN_HREF  47
+#define CAM_PIN_PCLK  13
+
+// 画像の大きさ。QQVGA（160×120）にすると速い
+const int CAM_W = 160;
+const int CAM_H = 120;
+// RGB565 のバイトの順番。黄色いボールが見つからず、ほかの色で反応するときは 0 にしてみる（要確認）
+const int CAM_SWAP_BYTES = 1;
+
+uint8_t *cam_mask = nullptr;
+int32_t *cam_stack = nullptr;
+
+// 最新の結果（カメラのタスクが書き、loop() が読む）
+volatile bool ball_new = false;
+volatile uint8_t ball_found = 0;
+volatile int8_t ball_deg = 0;
+volatile uint8_t ball_cm = 0;
+volatile uint8_t ball_size = 0;
+volatile uint32_t cam_frame_ms = 0;   // 1 枚にかかった時間（確認用）
+volatile uint32_t cam_frames = 0;
+uint8_t ball_seq = 0;
+
+bool camera_begin() {
+  camera_config_t c = {};
+  c.ledc_channel = LEDC_CHANNEL_0;
+  c.ledc_timer = LEDC_TIMER_0;
+  c.pin_d0 = CAM_PIN_D0; c.pin_d1 = CAM_PIN_D1; c.pin_d2 = CAM_PIN_D2; c.pin_d3 = CAM_PIN_D3;
+  c.pin_d4 = CAM_PIN_D4; c.pin_d5 = CAM_PIN_D5; c.pin_d6 = CAM_PIN_D6; c.pin_d7 = CAM_PIN_D7;
+  c.pin_xclk = CAM_PIN_XCLK;
+  c.pin_pclk = CAM_PIN_PCLK;
+  c.pin_vsync = CAM_PIN_VSYNC;
+  c.pin_href = CAM_PIN_HREF;
+  c.pin_sccb_sda = CAM_PIN_SIOD;
+  c.pin_sccb_scl = CAM_PIN_SIOC;
+  c.pin_pwdn = CAM_PIN_PWDN;
+  c.pin_reset = CAM_PIN_RESET;
+  c.xclk_freq_hz = 20000000;
+  c.pixel_format = PIXFORMAT_RGB565;
+  c.frame_size = FRAMESIZE_QQVGA;
+  c.fb_count = 2;
+  c.fb_location = CAMERA_FB_IN_PSRAM;
+  c.grab_mode = CAMERA_GRAB_LATEST;   // いちばん新しい画像を使う
+  if (esp_camera_init(&c) != ESP_OK) {
+    return false;
+  }
+  cam_mask = (uint8_t *)ps_malloc(CAM_W * CAM_H);
+  cam_stack = (int32_t *)ps_malloc(CAM_W * CAM_H * sizeof(int32_t));
+  return cam_mask && cam_stack;
+}
+
+void camera_task(void *arg) {
+  (void)arg;
+  for (;;) {
+    uint32_t t0 = millis();
+    camera_fb_t *fb = esp_camera_fb_get();
+    if (!fb) {
+      delay(10);
+      continue;
+    }
+    if (fb->width == CAM_W && fb->height == CAM_H && fb->format == PIXFORMAT_RGB565) {
+      ball_blob_t b;
+      ball_detect((const uint16_t *)fb->buf, CAM_W, CAM_H, CAM_SWAP_BYTES, cam_mask, cam_stack, &b);
+      if (b.found) {
+        float deg = ball_bearing_deg(&b, CAM_W);
+        float cm = ball_distance_mm(&b, CAM_W) / 10.0f;
+        ball_deg = (int8_t)constrain((int)lroundf(deg), -90, 90);
+        ball_cm = (uint8_t)constrain((int)lroundf(cm), 0, 254);
+        int size = b.w > b.h ? b.w : b.h;
+        ball_size = (uint8_t)constrain(size, 0, 255);
+        ball_found = b.clipped ? 2 : 1;   // 2 = 画像の端で切れている（距離が遠めに出る）
+      } else {
+        ball_found = 0;
+      }
+      ball_new = true;
+    }
+    esp_camera_fb_return(fb);
+    cam_frame_ms = millis() - t0;
+    cam_frames++;
+    delay(1);   // ほかのタスク（Wi-Fi など）にも回す
+  }
+}
+
+// STM32 に送る: 0xB0, 見つけたか, 向き, 距離, 大きさ, 番号, チェック
+void send_ball_to_stm32() {
+  uint8_t p[7];
+  p[0] = 0xB0;
+  p[1] = ball_found;
+  p[2] = (uint8_t)ball_deg;
+  p[3] = ball_cm;
+  p[4] = ball_size;
+  p[5] = ball_seq++;
+  p[6] = p[1] ^ p[2] ^ p[3] ^ p[4] ^ p[5];
+  Serial1.write(p, sizeof(p));
+}
+#endif
+
 // ==========================================
 // セットアップ
 // ==========================================
@@ -261,6 +390,15 @@ void setup() {
   if (peers == 0) {
     Serial.println("NOTE: ROBOT_MACS is not set. Positions are not sent or received.");
   }
+#if HAS_CAMERA
+  if (camera_begin()) {
+    // loop() と同じコア 1 で、同じ優先度で動かす（Wi-Fi はコア 0）
+    xTaskCreatePinnedToCore(camera_task, "camera", 8192, nullptr, 1, nullptr, 1);
+    Serial.println("Camera ready");
+  } else {
+    Serial.println("ERR: camera init (PSRAM が有効か確かめる)");
+  }
+#endif
   Serial.println("Ready");
 }
 
@@ -277,6 +415,14 @@ void loop() {
   if (now - last_recv_ms > LINK_TIMEOUT_MS) {
     buttons = 0;
   }
+
+#if HAS_CAMERA
+  // ボールを探した結果（新しい結果が出るたびに送る）
+  if (ball_new) {
+    ball_new = false;
+    send_ball_to_stm32();
+  }
+#endif
 
   // 自律機どうしの位置
   read_from_stm32();
@@ -301,6 +447,14 @@ void loop() {
                   (unsigned long)pos_sent_count, (unsigned long)peer_recv_count,
                   (unsigned long)rejected_count,
                   (now - last_recv_ms > LINK_TIMEOUT_MS) ? "(no signal)" : "");
+#if HAS_CAMERA
+    // カメラ: 1 秒の枚数、1 枚にかかった時間、ボール（見つけたか、向き、距離、大きさ）
+    static uint32_t last_frames = 0;
+    Serial.printf("camera fps=%lu frame_ms=%lu ball=%u deg=%d cm=%u size=%u\n",
+                  (unsigned long)(cam_frames - last_frames), (unsigned long)cam_frame_ms,
+                  ball_found, ball_deg, ball_cm, ball_size);
+    last_frames = cam_frames;
+#endif
     last_log_ms = now;
   }
 }

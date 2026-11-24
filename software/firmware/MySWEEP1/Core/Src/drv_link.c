@@ -19,6 +19,14 @@ static volatile uint32_t peer_ms = 0;
 static volatile int peer_once = 0;
 static uint8_t tx_buf[8];
 
+/* カメラで見つけたボール */
+#define BALL_LEN 6   /* 見つけたか〜番号（5 バイト）+ チェック */
+static uint8_t ball_buf[BALL_LEN];
+static uint8_t ball_pos = 0;
+static volatile link_ball_t ball;
+static volatile uint32_t ball_ms = 0;
+static volatile int ball_once = 0;
+
 void link_init(void) {
 	HAL_UART_Receive_IT(&huart4, &rx_byte, 1);
 }
@@ -86,7 +94,38 @@ static void peer_done(void) {
 	peer_once = 1;
 }
 
-/* state: 0 = 先頭待ち、1〜2 = ボタン、10 = もう 1 台の位置 */
+int link_ball(link_ball_t *out) {
+	if (!ball_once || (HAL_GetTick() - ball_ms) > BALL_TIMEOUT_MS) {
+		return 0;
+	}
+	__disable_irq();
+	out->found = ball.found;
+	out->deg = ball.deg;
+	out->cm = ball.cm;
+	out->size = ball.size;
+	out->seq = ball.seq;
+	__enable_irq();
+	return 1;
+}
+
+static void ball_done(void) {
+	uint8_t sum = 0;
+	for (int i = 0; i < BALL_LEN - 1; i++) {
+		sum ^= ball_buf[i];
+	}
+	if (sum != ball_buf[BALL_LEN - 1]) {
+		return;   /* 壊れている */
+	}
+	ball.found = ball_buf[0];
+	ball.deg = (int8_t)ball_buf[1];
+	ball.cm = ball_buf[2];
+	ball.size = ball_buf[3];
+	ball.seq = ball_buf[4];
+	ball_ms = HAL_GetTick();
+	ball_once = 1;
+}
+
+/* state: 0 = 先頭待ち、1〜2 = ボタン、10 = もう 1 台の位置、20 = ボール */
 void link_on_rx(void) {
 	switch (state) {
 	case 0:
@@ -95,6 +134,9 @@ void link_on_rx(void) {
 		} else if (rx_byte == 0xA6) {
 			peer_pos = 0;
 			state = 10;
+		} else if (rx_byte == 0xB0) {
+			ball_pos = 0;
+			state = 20;
 		}
 		break;
 	case 1:
@@ -113,6 +155,13 @@ void link_on_rx(void) {
 		peer_buf[peer_pos++] = rx_byte;
 		if (peer_pos >= PEER_LEN) {
 			peer_done();
+			state = 0;
+		}
+		break;
+	case 20:
+		ball_buf[ball_pos++] = rx_byte;
+		if (ball_pos >= BALL_LEN) {
+			ball_done();
 			state = 0;
 		}
 		break;
