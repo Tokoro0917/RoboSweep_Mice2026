@@ -6,9 +6,10 @@
  * ESP32 → STM32
  *   リモコンのボタン: 0xAA, ボタン, 0x55
  *   もう 1 台の自律機の位置: 0xA6, 番号, 区画 x, 区画 y, 次の区画 x, 次の区画 y, 状態, チェック
+ *   カメラで見つけたボール: 0xB0, 見つけたか, 向き, 距離, 大きさ, 番号, チェック
  * STM32 → ESP32（ESP32 が ESP-NOW でもう 1 台へ送る）
  *   自分の位置: 0xA5, 番号, 区画 x, 区画 y, 次の区画 x, 次の区画 y, 状態, チェック
- * チェック = 2〜7 バイト目の XOR
+ * チェック = 先頭とチェックを除いたバイトの XOR
  */
 #ifndef INC_DRV_LINK_H_
 #define INC_DRV_LINK_H_
@@ -45,6 +46,18 @@ int link_peer(link_peer_t *out);
 
 /* 自分の位置を ESP32 に送る（すぐ戻る。送っている途中なら何もしないで 0） */
 int link_send_self(const link_peer_t *self);
+
+/* カメラ（XIAO ESP32S3 Sense）で見つけたボール */
+typedef struct {
+	uint8_t found;    /* 0 = 見えない、1 = 見えた、2 = 見えたが画像の端で切れている（距離が遠めに出る） */
+	int8_t deg;       /* 向き [deg]。正面が 0、左が + */
+	uint8_t cm;       /* カメラからのだいたいの距離 [cm] */
+	uint8_t size;     /* 画像の上での大きさ [画素] */
+	uint8_t seq;      /* 送るたびに 1 増える */
+} link_ball_t;
+
+/* カメラの結果。BALL_TIMEOUT_MS 以内に届いていれば 1 を返して out に入れる */
+int link_ball(link_ball_t *out);
 
 /* UART の割り込みから呼ぶ（main.c） */
 void link_on_rx(void);
